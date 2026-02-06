@@ -7,6 +7,9 @@
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     
     <style>
         * {
@@ -545,6 +548,8 @@
     
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     
     <script>
         // Inicializar mapa centrado en Colombia
@@ -573,6 +578,14 @@
         L.control.layers(baseLayers).addTo(map);
         
         let markers = [];
+        let markerClusterGroup = L.markerClusterGroup({
+            maxClusterRadius: 80,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            disableClusteringAtZoom: 16
+        });
+        map.addLayer(markerClusterGroup);
         let polyline = null;
         let vehiculosData = [];
         
@@ -655,7 +668,7 @@
             const bounds = [];
             
             // Limpiar marcadores previos
-            markers.forEach(m => map.removeLayer(m));
+            markerClusterGroup.clearLayers();
             markers = [];
             
             datosOrdenados.forEach(v => {
@@ -664,7 +677,7 @@
                 // Crear marcador
                 const marker = L.marker([v.lat, v.lng], {
                     icon: v.encendido ? iconOnline : iconOffline
-                }).addTo(map);
+                });
                 
                 const fecha = new Date(v.fecha).toLocaleString('es-CO');
                 marker.bindPopup(`
@@ -676,6 +689,7 @@
                 `);
                 
                 markers.push(marker);
+                markerClusterGroup.addLayer(marker);
                 bounds.push([v.lat, v.lng]);
                 
                 // Lista
@@ -1212,7 +1226,7 @@
         
         // Limpiar mapa
         function limpiarMapa() {
-            markers.forEach(m => map.removeLayer(m));
+            markerClusterGroup.clearLayers();
             markers = [];
             if (polyline) {
                 map.removeLayer(polyline);
