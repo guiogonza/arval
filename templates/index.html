@@ -404,6 +404,22 @@
             gap: 8px;
             margin: 5px 0;
         }
+        
+        /* Estilos para tooltip de placa */
+        .placa-tooltip {
+            background: rgba(0, 0, 0, 0.8) !important;
+            border: none !important;
+            border-radius: 4px !important;
+            color: white !important;
+            font-weight: bold !important;
+            font-size: 11px !important;
+            padding: 4px 8px !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+        }
+        
+        .placa-tooltip::before {
+            border-top-color: rgba(0, 0, 0, 0.8) !important;
+        }
     </style>
 </head>
 <body>
@@ -687,6 +703,14 @@
                     <b>Última actualización:</b><br>${fecha}<br>
                     <b>Estado:</b> ${v.encendido ? '🟢 Comunicando' : '🔴 Sin comunicación'}
                 `);
+                
+                // Agregar tooltip permanente con la placa
+                marker.bindTooltip(v.placa, {
+                    permanent: true,
+                    direction: 'top',
+                    className: 'placa-tooltip',
+                    offset: [0, -10]
+                });
                 
                 markers.push(marker);
                 markerClusterGroup.addLayer(marker);
