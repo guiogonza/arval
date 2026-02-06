@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: geotab_postgres
+    environment:
+      POSTGRES_DB: geotab_gps
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - geotab_network
+
+  # Aplicación Flask
+  app:
+    build: .
+    container_name: geotab_app
+    environment:
+      GEOTAB_USERNAME: ${GEOTAB_USERNAME}
+      GEOTAB_PASSWORD: ${GEOTAB_PASSWORD}
+      GEOTAB_DATABASE: ${GEOTAB_DATABASE}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: geotab_gps
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./templates:/app/templates
+      - ./static:/app/static
+    networks:
+      - geotab_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  geotab_network:
+    driver: bridge

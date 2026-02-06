@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Estadísticas GPS - Geotab</title>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            color: #4fc3f7;
+        }
+        
+        .header nav a {
+            color: #fff;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 16px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            transition: background 0.3s;
+        }
+        
+        .header nav a:hover {
+            background: rgba(79, 195, 247, 0.3);
+        }
+        
+        .container {
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        /* Filtros */
+        .filtros {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .filtro-grupo {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filtro-grupo label {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        
+        .filtro-grupo input, .filtro-grupo select {
+            padding: 10px 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            padding: 10px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4fc3f7, #00bcd4);
+            color: #000;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(79, 195, 247, 0.4);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        
+        .btn-sync {
+            background: linear-gradient(135deg, #4caf50, #8bc34a);
+            color: #000;
+        }
+        
+        /* Tarjetas de resumen */
+        .resumen-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .card-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #4fc3f7;
+        }
+        
+        .card-label {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .card.warning {
+            border-color: #ff9800;
+        }
+        
+        .card.warning .card-value {
+            color: #ff9800;
+        }
+        
+        .card.danger {
+            border-color: #f44336;
+        }
+        
+        .card.danger .card-value {
+            color: #f44336;
+        }
+        
+        .card.success {
+            border-color: #4caf50;
+        }
+        
+        .card.success .card-value {
+            color: #4caf50;
+        }
+        
+        /* Grid de contenido */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        @media (max-width: 1200px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .panel-title {
+            font-size: 1.1rem;
+            color: #4fc3f7;
+        }
+        
+        /* Tabla */
+        .tabla-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        th {
+            background: rgba(0, 0, 0, 0.3);
+            color: #4fc3f7;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .badge-danger {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
+        
+        .badge-warning {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ff9800;
+        }
+        
+        .badge-success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+        
+        /* Gráficas */
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        /* Sin reportar */
+        .sin-reportar-list {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        
+        .sin-reportar-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .sin-reportar-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .dias-sin-reportar {
+            font-weight: bold;
+        }
+        
+        .dias-1 { color: #ff9800; }
+        .dias-7 { color: #f44336; }
+        .dias-30 { color: #9c27b0; }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #888;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            background: #4fc3f7;
+            color: #000;
+        }
+        
+        /* Sync status */
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+        }
+        
+        .sync-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .sync-indicator.offline {
+            background: #f44336;
+            animation: none;
+        }
+        
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #888;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(79, 195, 247, 0.3);
+            border-top-color: #4fc3f7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #4fc3f7;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>📊 Estadísticas GPS - Geotab</h1>
+        <div class="sync-status">
+            <div class="sync-indicator" id="syncIndicator"></div>
+            <span id="syncStatus">Cargando...</span>
+        </div>
+        <nav>
+            <a href="/">🗺️ Mapa</a>
+            <a href="/estadisticas">📊 Estadísticas</a>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <!-- Filtros -->
+        <div class="filtros">
+            <div class="filtro-grupo">
+                <label>Fecha Inicio</label>
+                <input type="date" id="fechaInicio">
+            </div>
+            <div class="filtro-grupo">
+                <label>Fecha Fin</label>
+                <input type="date" id="fechaFin">
+            </div>
+            <div class="filtro-grupo">
+                <label>Placa (opcional)</label>
+                <select id="filtroPlaca">
+                    <option value="">Todas las placas</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="cargarEstadisticas()">🔍 Buscar</button>
+            <button class="btn btn-sync" onclick="ejecutarSync()">🔄 Sincronizar Ahora</button>
+        </div>
+        
+        <!-- Tarjetas de resumen -->
+        <div class="resumen-cards" id="resumenCards">
+            <div class="card">
+                <div class="card-icon">🚗</div>
+                <div class="card-value" id="totalVehiculos">-</div>
+                <div class="card-label">Vehículos Activos</div>
+            </div>
+            <div class="card success">
+                <div class="card-icon">📍</div>
+                <div class="card-value" id="totalReportes">-</div>
+                <div class="card-label">Total Reportes</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">🛣️</div>
+                <div class="card-value" id="totalKm">-</div>
+                <div class="card-label">Km Recorridos</div>
+            </div>
+            <div class="card">
+                <div class="card-icon">🚦</div>
+                <div class="card-value" id="totalViajes">-</div>
+                <div class="card-label">Total Viajes</div>
+            </div>
+            <div class="card danger">
+                <div class="card-icon">⚠️</div>
+                <div class="card-value" id="totalExcesos">-</div>
+                <div class="card-label">Excesos Velocidad</div>
+            </div>
+        </div>
+        
+        <!-- Grid de contenido -->
+        <div class="content-grid">
+            <!-- Tabla de estadísticas por placa -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">📋 Estadísticas por Vehículo</span>
+                </div>
+                <div class="tabla-container" id="tablaEstadisticas">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>Cargando datos...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Gráfica de KM -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">📈 Kilómetros por Día</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartKm"></canvas>
+                </div>
+            </div>
+            
+            <!-- Vehículos sin reportar -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">🚨 Vehículos Sin Reportar</span>
+                </div>
+                <div class="tabs">
+                    <button class="tab active" onclick="cargarSinReportar(1, this)">+1 día</button>
+                    <button class="tab" onclick="cargarSinReportar(7, this)">+1 semana</button>
+                    <button class="tab" onclick="cargarSinReportar(30, this)">+1 mes</button>
+                </div>
+                <div class="sin-reportar-list" id="sinReportarList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>Cargando...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Excesos de velocidad -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span class="panel-title">⚡ Top Excesos de Velocidad</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartExcesos"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tabla de excesos de velocidad -->
+        <div class="panel">
+            <div class="panel-header">
+                <span class="panel-title">🚨 Detalle de Excesos de Velocidad</span>
+            </div>
+            <div class="tabla-container" id="tablaExcesos">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>Cargando datos...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let chartKm = null;
+        let chartExcesos = null;
+        
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            // Establecer fechas por defecto (hoy)
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('fechaInicio').value = hoy;
+            document.getElementById('fechaFin').value = hoy;
+            
+            cargarPlacas();
+            cargarEstadisticas();
+            cargarSinReportar(1);
+            cargarSyncStatus();
+            
+            // Actualizar estado de sync cada 30 segundos
+            setInterval(cargarSyncStatus, 30000);
+        });
+        
+        async function cargarPlacas() {
+            try {
+                const res = await fetch('/api/dispositivos');
+                const dispositivos = await res.json();
+                
+                const select = document.getElementById('filtroPlaca');
+                dispositivos.forEach(d => {
+                    const option = document.createElement('option');
+                    option.value = d.placa;
+                    option.textContent = d.placa;
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Error cargando placas:', e);
+            }
+        }
+        
+        async function cargarEstadisticas() {
+            const fechaInicio = document.getElementById('fechaInicio').value;
+            const fechaFin = document.getElementById('fechaFin').value;
+            const placa = document.getElementById('filtroPlaca').value;
+            
+            try {
+                // Cargar estadísticas
+                const statsUrl = `/api/estadisticas?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+                const statsRes = await fetch(statsUrl);
+                const stats = await statsRes.json();
+                
+                // Actualizar tarjetas
+                let totalVehiculos = 0, totalReportes = 0, totalKm = 0, totalViajes = 0, totalExcesos = 0;
+                
+                if (stats.datos && stats.datos.length > 0) {
+                    totalVehiculos = stats.datos.length;
+                    stats.datos.forEach(d => {
+                        totalReportes += d.reportes || 0;
+                        totalKm += d.km_total || 0;
+                        totalViajes += d.viajes || 0;
+                        totalExcesos += d.excesos || 0;
+                    });
+                }
+                
+                document.getElementById('totalVehiculos').textContent = totalVehiculos;
+                document.getElementById('totalReportes').textContent = totalReportes.toLocaleString();
+                document.getElementById('totalKm').textContent = totalKm.toFixed(1) + ' km';
+                document.getElementById('totalViajes').textContent = totalViajes;
+                document.getElementById('totalExcesos').textContent = totalExcesos;
+                
+                // Actualizar tabla
+                actualizarTablaEstadisticas(stats.datos || []);
+                
+                // Cargar gráfica de KM
+                cargarGraficaKm(placa);
+                
+                // Cargar excesos
+                cargarExcesos(fechaInicio, fechaFin, placa);
+                
+            } catch (e) {
+                console.error('Error cargando estadísticas:', e);
+            }
+        }
+        
+        function actualizarTablaEstadisticas(datos) {
+            const container = document.getElementById('tablaEstadisticas');
+            
+            if (datos.length === 0) {
+                container.innerHTML = '<div class="loading"><span>No hay datos para el período seleccionado. Ejecute una sincronización.</span></div>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Placa</th>
+                            <th>Viajes</th>
+                            <th>Km Total</th>
+                            <th>Reportes</th>
+                            <th>Excesos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            datos.forEach(d => {
+                const excesoBadge = d.excesos > 0 
+                    ? `<span class="badge badge-danger">${d.excesos}</span>` 
+                    : `<span class="badge badge-success">0</span>`;
+                    
+                html += `
+                    <tr>
+                        <td><strong>${d.placa}</strong></td>
+                        <td>${d.viajes || 0}</td>
+                        <td>${(d.km_total || 0).toFixed(1)} km</td>
+                        <td>${d.reportes || 0}</td>
+                        <td>${excesoBadge}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        async function cargarGraficaKm(placa) {
+            try {
+                let url = '/api/historial_km?dias=30';
+                if (placa) url += `&placa=${placa}`;
+                
+                const res = await fetch(url);
+                const datos = await res.json();
+                
+                const labels = datos.map(d => d.fecha);
+                const kmData = datos.map(d => d.total_km || 0);
+                const viajesData = datos.map(d => d.total_viajes || 0);
+                
+                const ctx = document.getElementById('chartKm').getContext('2d');
+                
+                if (chartKm) chartKm.destroy();
+                
+                chartKm = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Km Recorridos',
+                                data: kmData,
+                                borderColor: '#4fc3f7',
+                                backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Viajes',
+                                data: viajesData,
+                                borderColor: '#4caf50',
+                                backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#fff' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#888' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            y: {
+                                ticks: { color: '#888' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error('Error cargando gráfica:', e);
+            }
+        }
+        
+        async function cargarExcesos(fechaInicio, fechaFin, placa) {
+            try {
+                let url = `/api/excesos?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+                if (placa) url += `&placa=${placa}`;
+                
+                const res = await fetch(url);
+                const datos = await res.json();
+                
+                // Gráfica de excesos por placa
+                const resumen = datos.resumen_por_placa || [];
+                const labels = resumen.slice(0, 10).map(d => d.placa);
+                const excesosData = resumen.slice(0, 10).map(d => d.total);
+                
+                const ctx = document.getElementById('chartExcesos').getContext('2d');
+                
+                if (chartExcesos) chartExcesos.destroy();
+                
+                chartExcesos = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Excesos de Velocidad',
+                            data: excesosData,
+                            backgroundColor: 'rgba(244, 67, 54, 0.7)',
+                            borderColor: '#f44336',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#fff' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#888' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            },
+                            y: {
+                                ticks: { color: '#888' },
+                                grid: { color: 'rgba(255,255,255,0.1)' }
+                            }
+                        }
+                    }
+                });
+                
+                // Tabla de excesos
+                actualizarTablaExcesos(datos.excesos || []);
+                
+            } catch (e) {
+                console.error('Error cargando excesos:', e);
+            }
+        }
+        
+        function actualizarTablaExcesos(excesos) {
+            const container = document.getElementById('tablaExcesos');
+            
+            if (excesos.length === 0) {
+                container.innerHTML = '<div class="loading"><span>No hay excesos de velocidad en el período. ¡Bien! 🎉</span></div>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Placa</th>
+                            <th>Fecha/Hora</th>
+                            <th>Velocidad</th>
+                            <th>Límite</th>
+                            <th>Exceso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            excesos.forEach(e => {
+                const exceso = e.velocidad - e.limite_velocidad;
+                const excesoClass = exceso > 30 ? 'badge-danger' : 'badge-warning';
+                
+                html += `
+                    <tr>
+                        <td><strong>${e.placa}</strong></td>
+                        <td>${formatearFecha(e.fecha_gps)}</td>
+                        <td><span class="badge badge-danger">${e.velocidad.toFixed(0)} km/h</span></td>
+                        <td>${e.limite_velocidad} km/h</td>
+                        <td><span class="badge ${excesoClass}">+${exceso.toFixed(0)} km/h</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
+        async function cargarSinReportar(dias, btn) {
+            // Actualizar tabs activos
+            if (btn) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+            }
+            
+            const container = document.getElementById('sinReportarList');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div><span>Cargando...</span></div>';
+            
+            try {
+                const res = await fetch(`/api/sin_reportar?dias=${dias}`);
+                const datos = await res.json();
+                
+                if (!datos.vehiculos || datos.vehiculos.length === 0) {
+                    container.innerHTML = '<div class="loading"><span>✅ Todos los vehículos han reportado</span></div>';
+                    return;
+                }
+                
+                let html = '';
+                datos.vehiculos.forEach(v => {
+                    let diasTexto = 'Nunca';
+                    let diasClass = 'dias-30';
+                    
+                    if (v.dias_sin_reportar !== null && v.dias_sin_reportar !== undefined) {
+                        const dias = parseFloat(v.dias_sin_reportar);
+                        diasTexto = dias.toFixed(1) + ' días';
+                        diasClass = dias >= 30 ? 'dias-30' : dias >= 7 ? 'dias-7' : 'dias-1';
+                    }
+                    
+                    html += `
+                        <div class="sin-reportar-item">
+                            <div>
+                                <strong>${v.placa}</strong>
+                                <div style="font-size: 0.8rem; color: #888;">
+                                    Último: ${v.fecha_gps ? formatearFecha(v.fecha_gps) : 'Nunca'}
+                                </div>
+                            </div>
+                            <span class="dias-sin-reportar ${diasClass}">
+                                ${diasTexto}
+                            </span>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            } catch (e) {
+                console.error('Error cargando sin reportar:', e);
+                container.innerHTML = '<div class="loading"><span>Error al cargar datos</span></div>';
+            }
+        }
+        
+        async function cargarSyncStatus() {
+            try {
+                const res = await fetch('/api/sync/status');
+                const status = await res.json();
+                
+                const indicator = document.getElementById('syncIndicator');
+                const statusText = document.getElementById('syncStatus');
+                
+                if (status.running) {
+                    indicator.classList.remove('offline');
+                    statusText.textContent = `Sincronizando cada ${status.intervalo_min} min`;
+                    if (status.ultima_sync) {
+                        statusText.textContent += ` | Última: ${formatearFecha(status.ultima_sync)}`;
+                    }
+                } else {
+                    indicator.classList.add('offline');
+                    statusText.textContent = 'Sincronización detenida';
+                }
+            } catch (e) {
+                console.error('Error cargando status:', e);
+            }
+        }
+        
+        async function ejecutarSync() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '⏳ Sincronizando...';
+            
+            try {
+                const res = await fetch('/api/sync/ejecutar', { method: 'POST' });
+                const result = await res.json();
+                
+                if (result.status === 'ok') {
+                    alert('✅ Sincronización completada');
+                    cargarEstadisticas();
+                    cargarSinReportar(1);
+                } else {
+                    alert('❌ Error: ' + result.mensaje);
+                }
+            } catch (e) {
+                alert('❌ Error al sincronizar: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔄 Sincronizar Ahora';
+            }
+        }
+        
+        function formatearFecha(fechaStr) {
+            if (!fechaStr) return '-';
+            const fecha = new Date(fechaStr);
+            return fecha.toLocaleString('es-CO', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    </script>
+</body>
+</html>
