@@ -103,11 +103,53 @@
         .map-container {
             flex: 1;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
         
         #map {
             width: 100%;
-            height: 100%;
+            flex: 1;
+        }
+        
+        #speed-chart-container {
+            display: none;
+            height: 180px;
+            background: white;
+            border-top: 2px solid #e0e0e0;
+            padding: 8px 12px 4px 12px;
+            position: relative;
+        }
+        
+        #speed-chart-container .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        
+        #speed-chart-container .chart-header h4 {
+            margin: 0;
+            font-size: 0.85rem;
+            color: #333;
+        }
+        
+        #speed-chart-container .chart-header .chart-info {
+            font-size: 0.75rem;
+            color: #888;
+        }
+        
+        #speed-chart-container .btn-close-chart {
+            background: none;
+            border: none;
+            font-size: 1.1rem;
+            cursor: pointer;
+            color: #999;
+            padding: 0 4px;
+        }
+        
+        #speed-chart-container .btn-close-chart:hover {
+            color: #333;
         }
         
         .form-group {
@@ -550,6 +592,16 @@
         
         <div class="map-container">
             <div id="map"></div>
+            <div id="speed-chart-container">
+                <div class="chart-header">
+                    <h4>📈 Velocidad</h4>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="chart-info" id="chart-hover-info"></span>
+                        <button class="btn-close-chart" onclick="cerrarGrafica()" title="Cerrar gráfica">✕</button>
+                    </div>
+                </div>
+                <canvas id="speedChart"></canvas>
+            </div>
             <div class="legend">
                 <strong>Leyenda</strong>
                 <div class="legend-item">
@@ -566,6 +618,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Leaflet MarkerCluster JS -->
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     
     <script>
         // Inicializar mapa centrado en Colombia
@@ -917,6 +971,154 @@
             }
         }
         
+        // ===== GRÁFICA DE VELOCIDAD =====
+        let speedChart = null;
+        let speedChartMarker = null; // Marcador en mapa al hacer hover
+        let allSpeedPoints = [];     // Todos los puntos para la gráfica
+        
+        function renderSpeedChart(viajes) {
+            // Recopilar todos los puntos con velocidad y hora
+            allSpeedPoints = [];
+            viajes.forEach((viaje, idx) => {
+                viaje.puntos.forEach(p => {
+                    allSpeedPoints.push({
+                        fecha: new Date(p.fecha),
+                        velocidad: p.velocidad || 0,
+                        lat: p.lat,
+                        lng: p.lng,
+                        viaje: idx
+                    });
+                });
+            });
+            // Ordenar por fecha
+            allSpeedPoints.sort((a, b) => a.fecha - b.fecha);
+            
+            if (allSpeedPoints.length === 0) return;
+            
+            const labels = allSpeedPoints.map(p => p.fecha);
+            const speeds = allSpeedPoints.map(p => p.velocidad);
+            const maxSpeed = Math.max(...speeds);
+            
+            // Mostrar contenedor
+            document.getElementById('speed-chart-container').style.display = 'block';
+            // Forzar re-layout del mapa
+            setTimeout(() => map.invalidateSize(), 50);
+            
+            // Destruir gráfica anterior
+            if (speedChart) speedChart.destroy();
+            
+            const ctx = document.getElementById('speedChart').getContext('2d');
+            
+            // Gradiente
+            const gradient = ctx.createLinearGradient(0, 0, 0, 150);
+            gradient.addColorStop(0, 'rgba(26, 115, 232, 0.4)');
+            gradient.addColorStop(1, 'rgba(26, 115, 232, 0.02)');
+            
+            speedChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Velocidad (km/h)',
+                        data: speeds,
+                        borderColor: '#1a73e8',
+                        backgroundColor: gradient,
+                        borderWidth: 1.5,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#1a73e8',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function(ctx) {
+                                    return ctx[0].label ? new Date(ctx[0].parsed.x).toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '';
+                                },
+                                label: function(ctx) {
+                                    return ` ${ctx.parsed.y} km/h`;
+                                }
+                            },
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleFont: { size: 12 },
+                            bodyFont: { size: 13, weight: 'bold' },
+                            padding: 8,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            ticks: {
+                                callback: function(val, index) {
+                                    const d = allSpeedPoints[index]?.fecha;
+                                    if (!d) return '';
+                                    // Mostrar ~15 etiquetas
+                                    const step = Math.max(1, Math.floor(allSpeedPoints.length / 15));
+                                    if (index % step !== 0) return '';
+                                    return d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+                                },
+                                maxRotation: 0,
+                                font: { size: 10 },
+                                color: '#888'
+                            },
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: Math.ceil(maxSpeed / 20) * 20 + 10,
+                            ticks: {
+                                callback: v => v + ' kph',
+                                font: { size: 10 },
+                                color: '#888',
+                                stepSize: 20
+                            },
+                            grid: { color: 'rgba(0,0,0,0.06)' }
+                        }
+                    },
+                    onHover: function(event, elements) {
+                        if (elements.length > 0) {
+                            const idx = elements[0].index;
+                            const pt = allSpeedPoints[idx];
+                            if (pt) {
+                                document.getElementById('chart-hover-info').textContent = 
+                                    `${pt.velocidad} kph  ${pt.fecha.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', second:'2-digit'})}`;
+                                // Mover marcador en mapa
+                                if (speedChartMarker) map.removeLayer(speedChartMarker);
+                                speedChartMarker = L.circleMarker([pt.lat, pt.lng], {
+                                    radius: 8, fillColor: '#ff0000', color: '#fff',
+                                    weight: 3, fillOpacity: 1
+                                }).addTo(map);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Info inicial
+            document.getElementById('chart-hover-info').textContent = `Max: ${maxSpeed} kph | ${allSpeedPoints.length} puntos`;
+        }
+        
+        function cerrarGrafica() {
+            document.getElementById('speed-chart-container').style.display = 'none';
+            if (speedChart) { speedChart.destroy(); speedChart = null; }
+            if (speedChartMarker) { map.removeLayer(speedChartMarker); speedChartMarker = null; }
+            setTimeout(() => map.invalidateSize(), 50);
+        }
+        
+        // ===== COLORES Y VIAJES =====
         // Colores para los viajes
         const coloresViajes = [
             '#1a73e8', // Azul
@@ -1059,6 +1261,9 @@
                 
                 // Actualizar leyenda con colores de viajes
                 actualizarLeyendaViajes(data.viajes);
+                
+                // Renderizar gráfica de velocidad
+                renderSpeedChart(data.viajes);
                 
             } catch (error) {
                 alert('Error cargando recorrido: ' + error.message);
@@ -1243,6 +1448,9 @@
                 const viajesSeleccionados = data.viajes.filter((v, i) => indicesSeleccionados.includes(i));
                 actualizarLeyendaViajes(viajesSeleccionados);
                 
+                // Renderizar gráfica con viajes seleccionados
+                renderSpeedChart(viajesSeleccionados);
+                
             } catch (error) {
                 alert('Error cargando recorrido: ' + error.message);
             }
@@ -1259,6 +1467,8 @@
             // Limpiar todas las líneas de viajes
             polylines.forEach(p => map.removeLayer(p));
             polylines = [];
+            // Limpiar gráfica
+            cerrarGrafica();
             
             // Restaurar leyenda por defecto
             document.querySelector('.legend').innerHTML = `
