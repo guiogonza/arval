@@ -758,9 +758,9 @@
                     <b>Estado:</b> ${v.encendido ? '🟢 Comunicando' : '🔴 Sin comunicación'}
                 `);
                 
-                // Agregar tooltip permanente con la placa
+                // Tooltip con placa: permanente solo en zoom detallado
                 marker.bindTooltip(v.placa, {
-                    permanent: true,
+                    permanent: map.getZoom() >= 15,
                     direction: 'top',
                     className: 'placa-tooltip',
                     offset: [0, -10]
@@ -832,6 +832,20 @@
                 }
             });
         }
+
+        // Mostrar/ocultar etiquetas de placa según zoom
+        map.on('zoomend', function() {
+            const zoomActual = map.getZoom();
+            markers.forEach(m => {
+                if (m.getTooltip()) {
+                    if (zoomActual >= 15) {
+                        m.openTooltip();
+                    } else {
+                        m.closeTooltip();
+                    }
+                }
+            });
+        });
         
         // Cargar dispositivos para select
         async function cargarDispositivos() {
