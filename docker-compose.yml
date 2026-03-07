@@ -35,7 +35,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5000:5000"
+      - "${APP_PORT:-5000}:5000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +45,39 @@ services:
     networks:
       - geotab_network
     restart: unless-stopped
+
+  # Sincronización Geotab → GPSWox 173 (cada 5 minutos)
+  live_sync:
+    build: .
+    container_name: geotab_live_sync
+    command: python gpswox_live_sync.py
+    environment:
+      GEOTAB_USERNAME: ${GEOTAB_USERNAME}
+      GEOTAB_PASSWORD: ${GEOTAB_PASSWORD}
+      GEOTAB_DATABASE: ${GEOTAB_DATABASE}
+      PYTHONUNBUFFERED: 1
+      PYTHONIOENCODING: utf-8
+    restart: unless-stopped
+    networks:
+      - geotab_network
+
+  # Sincronización Geotab → plataforma.sistemagps.online (cada 5 minutos)
+  plataforma_sync:
+    build: .
+    container_name: geotab_plataforma_sync
+    command: python plataforma_live_sync.py
+    environment:
+      GEOTAB_USERNAME: ${GEOTAB_USERNAME}
+      GEOTAB_PASSWORD: ${GEOTAB_PASSWORD}
+      GEOTAB_DATABASE: ${GEOTAB_DATABASE}
+      PLATAFORMA_EMAIL: ${PLATAFORMA_EMAIL:-gerencia@rastrear.com.co}
+      PLATAFORMA_PASSWORD: ${PLATAFORMA_PASSWORD:-a791025*}
+      PLATAFORMA_HISTORY_DAYS: "0"
+      PYTHONUNBUFFERED: 1
+      PYTHONIOENCODING: utf-8
+    restart: unless-stopped
+    networks:
+      - geotab_network
 
 volumes:
   postgres_data:

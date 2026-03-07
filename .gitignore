@@ -38,3 +38,12 @@ logs/
 
 # Docker
 docker-compose.override.yml
+
+# Scripts de diagnostico / temporales
+check_*.py
+test_*.py
+list_*.py
+buscar_*.py
+_*.py
+historial_progreso.txt
+plataforma_sync.log
