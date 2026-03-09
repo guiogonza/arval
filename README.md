@@ -156,12 +156,86 @@ python app.py
 - Los datos se conservan en un volumen Docker persistente
 - Para producción, cambiar las contraseñas en `.env` y `docker-compose.yml`
 
+## �️ Scripts de Mantenimiento
+
+### Diagnóstico del Sistema
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\diagnose.ps1
+```
+
+**Linux/Mac:**
+```bash
+bash scripts/diagnose.sh
+```
+
+Este script verifica:
+- Estado de contenedores Docker
+- Conexión a PostgreSQL
+- Conteo de registros en la base de datos
+- Salud del servicio web
+
+### Inicialización Segura
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\init_db.ps1
+```
+
+**Linux/Mac:**
+```bash
+bash scripts/init_db.sh
+```
+
+Este script:
+- Verifica archivos de configuración
+- Detecta volúmenes antiguos que puedan causar conflictos
+- Ofrece opciones para hacer backup antes de recrear
+- Inicializa el sistema de forma segura
+
+## 🚨 Solución de Problemas
+
+Si encuentras errores como:
+- `password authentication failed for user "postgres"`
+- Contenedores que reinician constantemente
+- Problemas de conexión a la base de datos
+
+**Consulta la guía completa:** [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+
+### Problema Común: Contraseña Incorrecta de PostgreSQL
+
+**Causa:** El volumen de Docker tiene datos antiguos con una contraseña diferente.
+
+**Solución Rápida:**
+```bash
+# 1. Detener servicios
+docker-compose down
+
+# 2. Eliminar volumen corrupto (¡perderás los datos!)
+docker volume rm geotab_postgres_data
+
+# 3. Recrear servicios
+docker-compose up -d
+```
+
+**O usa el script de inicialización que te guiará paso a paso:**
+```powershell
+.\scripts\init_db.ps1
+```
+
 ## 🔐 Seguridad
 
 - **NUNCA** subir el archivo `.env` a Git
 - Cambiar las contraseñas por defecto de PostgreSQL
 - Usar HTTPS en producción
 - Revisar permisos de acceso a la base de datos
+- Rotar contraseñas periódicamente (ver [TROUBLESHOOTING.md](TROUBLESHOOTING.md))
+
+## 📚 Documentación Adicional
+
+- [DEPLOY.md](DEPLOY.md) - Guía completa de despliegue en diferentes plataformas
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Solución de problemas comunes y mejores prácticas
 
 ## 📄 Licencia
 

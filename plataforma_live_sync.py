@@ -4,7 +4,8 @@ Sincronización Geotab → plataforma.sistemagps.online
 FLUJO:
   1. Al arrancar: carga historial desde HISTORY_FROM (2026-03-01) para todas
      las placas Geotab (grupo Geotab id=7444), enviando puntos GPS vía OsmAnd.
-  2. Loop cada 5 minutos: envía la última posición de cada vehículo.
+  2. Loop cada 5 minutos: envía TODOS los LogRecord de la ventana de tiempo
+     (últimos 5 min + 30 s de margen) para replicar todos los puntos Geotab.
 
 ENDPOINTS PLATAFORMA:
   POST https://plataforma.sistemagps.online/api/login
@@ -225,11 +226,9 @@ def cargar_historial(client: mygeotab.API, catalogo: dict):
         try:
             logs = client.get(
                 "LogRecord",
-                search={
-                    "deviceSearch": {"id": gid},
-                    "fromDate": HISTORY_FROM.isoformat(),
-                    "toDate":   ahora.isoformat(),
-                }
+                deviceSearch={"id": gid},
+                fromDate=HISTORY_FROM,
+                toDate=ahora,
             )
         except Exception as e:
             print(f"    ! Error obteniendo logs: {e}")
@@ -295,41 +294,53 @@ def cargar_historial(client: mygeotab.API, catalogo: dict):
 # 7. ENVIAR POSICIONES EN VIVO
 # ---------------------------------------------------------------------------
 def enviar_posiciones_live(client: mygeotab.API, catalogo: dict):
-    ahora = datetime.now(timezone.utc).strftime("%H:%M:%S")
-    print(f"\n[{ahora}] Enviando posiciones en vivo...")
+    ahora    = datetime.now(timezone.utc)
+    ahora_str = ahora.strftime("%H:%M:%S")
+    print(f"\n[{ahora_str}] Enviando posiciones en vivo...")
 
-    statuses = client.get("DeviceStatusInfo")
+    # Obtiene TODOS los LogRecord de la ventana actual (+ 30 s de margen de solape)
+    desde = ahora - timedelta(seconds=SYNC_INTERVAL + 30)
+
+    try:
+        logs = client.get(
+            "LogRecord",
+            fromDate=desde,
+            toDate=ahora,
+        )
+    except Exception as e:
+        print(f"  ! Error obteniendo LogRecord: {e}")
+        return 0
+
     enviados = 0
     sin_gps  = 0
     errores  = 0
 
-    for status in statuses:
+    for i, log in enumerate(logs):
         try:
-            device_raw = status.get("device", {})
+            device_raw = log.get("device", {})
             gid = device_raw.get("id", "") if isinstance(device_raw, dict) else str(device_raw)
 
             imei = catalogo.get(gid)
             if not imei:
                 continue
 
-            lat  = status.get("latitude",  0) or 0
-            lng  = status.get("longitude", 0) or 0
-            spd  = status.get("speed",     0) or 0
-            bear = status.get("bearing",   0) or 0
+            lat = log.get("latitude",  0) or 0
+            lng = log.get("longitude", 0) or 0
+            spd = log.get("speed",     0) or 0
 
             if not lat or not lng:
                 sin_gps += 1
                 continue
 
-            dt_gps = status.get("dateTime")
-            if dt_gps:
-                ts = int(dt_gps.timestamp()) if hasattr(dt_gps, "timestamp") else int(time.time())
+            dt = log.get("dateTime")
+            if dt:
+                ts = int(dt.timestamp()) if hasattr(dt, "timestamp") else int(time.time())
             else:
                 ts = int(time.time())
 
-            ignicion = status.get("isDeviceCommunicating", False)
+            ignicion = spd > 0
 
-            if enviar_osmand(imei, lat, lng, spd, bear, ts, ignicion):
+            if enviar_osmand(imei, lat, lng, spd, 0, ts, ignicion):
                 enviados += 1
             else:
                 errores += 1
@@ -338,7 +349,11 @@ def enviar_posiciones_live(client: mygeotab.API, catalogo: dict):
             errores += 1
             print(f"  ! Error: {e}")
 
-    print(f"  {enviados} enviados | {sin_gps} sin GPS | {errores} errores")
+        # Throttle ligero para no saturar OsmAnd
+        if i > 0 and i % 100 == 0:
+            time.sleep(0.1)
+
+    print(f"  {len(logs)} puntos obtenidos | {enviados} enviados | {sin_gps} sin GPS | {errores} errores")
     return enviados
 
 

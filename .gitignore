@@ -47,3 +47,6 @@ buscar_*.py
 _*.py
 historial_progreso.txt
 plataforma_sync.log
+
+historial_out.txt
+historial_err.txt

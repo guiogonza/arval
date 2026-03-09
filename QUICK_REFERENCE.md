@@ -229,15 +229,87 @@ Geotab/
 
 ---
 
-## 🔄 Flujo de Sincronización
+## 🔄 Flujo de Sincronización (plataforma.sistemagps.online)
 
 ```
-1. Aplicación inicia → Conecta a Geotab API
-2. Cada 5 minutos → Obtiene lista de dispositivos
-3. Para cada dispositivo → Obtiene última ubicación
-4. Guarda en PostgreSQL → dispositivos + ubicaciones
-5. Frontend consulta → Muestra en mapa
+1. Contenedor plataforma_sync inicia → Conecta Geotab + plataforma
+2. Cada 5 min → client.get("LogRecord", fromDate=ahora-5m30s, toDate=ahora)
+3. Todos los puntos GPS del periodo → enviados a OsmAnd (puerto 6055)
+4. ~700-1000 puntos por ciclo (97 vehículos × puntos/vehículo)
+5. 0 errores en condiciones normales
 ```
+
+### Contenedores Docker (servidor 164.68.118.86)
+| Contenedor | Script | Función |
+|---|---|---|
+| `geotab_app` | `app.py` | Flask web / mapa |
+| `geotab_plataforma_sync` | `plataforma_live_sync.py` | Sync cada 5 min → plataforma |
+| `geotab_live_sync` | `gpswox_live_sync.py` | Sync GPSWox 173 |
+| `geotab_postgres` | postgres:16 | Base de datos |
+
+### Ver logs del sync en vivo
+```bash
+docker logs geotab_plataforma_sync --tail 20
+```
+
+### Reconectar y redesplegar
+```bash
+ssh root@164.68.118.86
+cd /root/geotab
+docker compose build plataforma_sync
+docker compose up -d plataforma_sync
+```
+
+---
+
+## 👥 Gestión de Usuarios en Plataforma GPS
+
+**Grupos en plataforma.sistemagps.online:**
+- Grupo `Geotab` (id=7444) → 97 placas → 23 usuarios asignados
+- Grupo `ARVAL` (id=7443) → 79 placas → solo 2 admins (gerencia + guiogonza)
+
+### API correcta para reemplazar usuarios (no agregar)
+```python
+# 1. Ver usuarios actuales de un device
+GET /api/edit_device_data?device_id=X&user_api_hash=TOKEN
+# → campo sel_users
+
+# 2. Reemplazar usuarios (device_id DEBE ir como query param, no en body)
+POST /api/edit_device?device_id=X&user_api_hash=TOKEN
+Body JSON: {"user_id": [id1, id2, id3]}
+```
+
+### Script de asignación masiva
+```bash
+python _asignar_usuarios_v2.py    # Asigna 23 usuarios a grupo Geotab (id=7444)
+python _restringir_grupo_arval.py # Deja solo 2 admins en grupo ARVAL (id=7443)
+```
+
+**Admins permanentes** (nunca eliminar):
+- `14682` → gerencia@rastrear.com.co
+- `17234` → guiogonza@gmail.com
+
+---
+
+## 📦 Carga Histórica de Puntos GPS
+
+Para cargar todos los puntos desde una fecha pasada a plataforma.sistemagps.online:
+
+```bash
+# Carga completa desde 2026-03-01 (4 workers en paralelo, día a día)
+python _carga_historica.py
+
+# Monitorear progreso
+Get-Content historial_progreso.txt   # Windows PowerShell
+cat historial_progreso.txt           # Linux
+```
+
+Estructura: procesa día a día, 4 placas en paralelo por día. El archivo
+`historial_progreso.txt` se actualiza al completar cada día.
+
+---
+
+## 🔄 Flujo de Sincronización (legacy PostgreSQL)
 
 ---
 
