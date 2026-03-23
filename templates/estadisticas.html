@@ -8,6 +8,11 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Flatpickr Calendar -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -405,11 +410,11 @@
         <div class="filtros">
             <div class="filtro-grupo">
                 <label>Fecha Inicio</label>
-                <input type="date" id="fechaInicio">
+                <input type="text" id="fechaInicio" placeholder="Seleccionar fecha" readonly>
             </div>
             <div class="filtro-grupo">
                 <label>Fecha Fin</label>
-                <input type="date" id="fechaFin">
+                <input type="text" id="fechaFin" placeholder="Seleccionar fecha" readonly>
             </div>
             <div class="filtro-grupo">
                 <label>Placa (opcional)</label>
@@ -526,6 +531,25 @@
         document.addEventListener('DOMContentLoaded', () => {
             // Establecer fechas por defecto (hoy)
             const hoy = new Date().toISOString().split('T')[0];
+
+            // Calendarios Flatpickr
+            flatpickr('#fechaInicio', {
+                locale: 'es',
+                dateFormat: 'Y-m-d',
+                defaultDate: hoy,
+                maxDate: 'today',
+                allowInput: false,
+                disableMobile: true
+            });
+            flatpickr('#fechaFin', {
+                locale: 'es',
+                dateFormat: 'Y-m-d',
+                defaultDate: hoy,
+                maxDate: 'today',
+                allowInput: false,
+                disableMobile: true
+            });
+
             document.getElementById('fechaInicio').value = hoy;
             document.getElementById('fechaFin').value = hoy;
             
