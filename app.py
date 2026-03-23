@@ -30,7 +30,7 @@ init_database()
 _client = None
 
 def get_client():
-    """Obtiene o crea el cliente de Geotab"""
+    """Obtiene o crea el cliente de Geotab; re-autentica si el token expiró."""
     global _client
     if _client is None:
         _client = mygeotab.API(
@@ -40,6 +40,15 @@ def get_client():
         )
         _client.authenticate()
     return _client
+
+def call_geotab(method, *args, **kwargs):
+    """Llama a la API de Geotab y re-autentica si el token expiró."""
+    global _client
+    try:
+        return getattr(get_client(), method)(*args, **kwargs)
+    except mygeotab.exceptions.AuthenticationException:
+        _client = None  # fuerza re-autenticación
+        return getattr(get_client(), method)(*args, **kwargs)
 
 
 @app.route('/')
@@ -57,8 +66,7 @@ def estadisticas():
 @app.route('/api/dispositivos')
 def get_dispositivos():
     """Retorna lista de dispositivos (placas)"""
-    client = get_client()
-    devices = client.get('Device')
+    devices = call_geotab('get', 'Device')
     
     resultado = [
         {'id': d.get('id'), 'placa': d.get('name'), 'serial': d.get('serialNumber')}
@@ -71,14 +79,12 @@ def get_dispositivos():
 @app.route('/api/ubicaciones')
 def get_ubicaciones():
     """Retorna última ubicación de todos los dispositivos"""
-    client = get_client()
-    
     # Obtener dispositivos con serial
-    devices = client.get('Device')
+    devices = call_geotab('get', 'Device')
     device_map = {d.get('id'): {'name': d.get('name'), 'serial': d.get('serialNumber', '')} for d in devices}
     
     # Obtener estado actual de dispositivos (incluye ubicación)
-    status_info = client.get('DeviceStatusInfo')
+    status_info = call_geotab('get', 'DeviceStatusInfo')
     
     ubicaciones = []
     for status in status_info:
@@ -113,10 +119,8 @@ def get_viajes():
         return jsonify({'error': 'Se requiere placa y fecha'}), 400
     
     try:
-        client = get_client()
-        
         # Buscar dispositivo por nombre (placa)
-        devices = client.get('Device', name=placa)
+        devices = call_geotab('get', 'Device', name=placa)
         if not devices:
             return jsonify({'error': 'Dispositivo no encontrado'}), 404
         
@@ -128,7 +132,7 @@ def get_viajes():
         fecha_fin = fecha_inicio + timedelta(days=1)
         
         # Obtener viajes del día
-        trips = client.get('Trip', 
+        trips = call_geotab('get', 'Trip',
             deviceSearch={'id': device_id},
             fromDate=fecha_inicio,
             toDate=fecha_fin
@@ -187,10 +191,8 @@ def get_recorrido():
         return jsonify({'error': 'Se requiere placa y fecha'}), 400
     
     try:
-        client = get_client()
-        
         # Buscar dispositivo
-        devices = client.get('Device', name=placa)
+        devices = call_geotab('get', 'Device', name=placa)
         if not devices:
             return jsonify({'error': 'Dispositivo no encontrado'}), 404
         
@@ -202,14 +204,14 @@ def get_recorrido():
         fecha_fin = fecha_inicio + timedelta(days=1)
         
         # Obtener viajes del día para saber los rangos de tiempo
-        trips = client.get('Trip', 
+        trips = call_geotab('get', 'Trip',
             deviceSearch={'id': device_id},
             fromDate=fecha_inicio,
             toDate=fecha_fin
         )
         
         # Obtener registros GPS del día
-        log_records = client.get('LogRecord',
+        log_records = call_geotab('get', 'LogRecord',
             deviceSearch={'id': device_id},
             fromDate=fecha_inicio,
             toDate=fecha_fin
@@ -217,7 +219,7 @@ def get_recorrido():
         
         # Obtener datos de ignición (StatusData con DiagnosticIgnitionId)
         try:
-            status_data = client.get('StatusData',
+            status_data = call_geotab('get', 'StatusData',
                 deviceSearch={'id': device_id},
                 diagnosticSearch={'id': 'DiagnosticIgnitionId'},
                 fromDate=fecha_inicio,
