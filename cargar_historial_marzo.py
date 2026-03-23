@@ -21,6 +21,7 @@ import requests
 import json
 import time
 import asyncio
+import threading
 import aiohttp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter
@@ -42,10 +43,14 @@ FECHA_FIN     = date(2026, 3, 23)   # hoy exclusive = hasta ayer
 
 # Límites de concurrencia (respetar la API fuente)
 MAX_DEV_PARALELO  = 4    # dispositivos en paralelo
+MAX_SRC_CONCUR    = 2    # máximo requests simultáneos a la API fuente
 MAX_OSMAND_PAR    = 20   # puntos GPS en paralelo por dispositivo
 PAUSA_ENTRE_DEVS  = 0.5  # seg entre grupos de dispositivos
 PAUSA_ENTRE_DIAS  = 0.3  # seg entre días de un mismo dispositivo
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Semáforo global: limita requests concurrentes a la API fuente entre todos los hilos
+_src_semaphore = threading.Semaphore(MAX_SRC_CONCUR)
 
 
 def make_session():
@@ -138,29 +143,44 @@ def obtener_historia_dia(session, token, device_id, dia: date):
     vistos = set()   # deduplicar por timestamp
 
     for from_time, to_time in FRANJAS_HORARIAS:
-        try:
-            r = session.post(SRC_BASE + '/get_history', json={
-                'user_api_hash': token,
-                'device_id'    : device_id,
-                'from_date'    : fecha_str,
-                'to_date'      : fecha_str,
-                'from_time'    : from_time,
-                'to_time'      : to_time,
-            }, timeout=60)
-            r.raise_for_status()
-            data = r.json()
-            if data.get('status') != 1:
-                continue
+        intentos = 0
+        while intentos < 4:  # hasta 4 reintentos por franja (429 / timeout)
+            try:
+                with _src_semaphore:  # máximo MAX_SRC_CONCUR requests simultáneos
+                    r = session.post(SRC_BASE + '/get_history', json={
+                        'user_api_hash': token,
+                        'device_id'    : device_id,
+                        'from_date'    : fecha_str,
+                        'to_date'      : fecha_str,
+                        'from_time'    : from_time,
+                        'to_time'      : to_time,
+                    }, timeout=60)
 
-            for p in _parsear_puntos(data):
-                key = p['timestamp']
-                if key not in vistos:
-                    vistos.add(key)
-                    todos_los_puntos.append(p)
+                # Manejo 429 Too Many Requests
+                if r.status_code == 429:
+                    retry_after = int(r.headers.get('Retry-After', 10))
+                    log(f'    ⏳ 429 rate-limit {device_id} {fecha_str} {from_time} — esperar {retry_after}s')
+                    time.sleep(retry_after)
+                    intentos += 1
+                    continue
 
-            time.sleep(0.1)  # pausa mínima entre franjas
-        except Exception as e:
-            log(f'    ⚠ get_history {device_id} {fecha_str} {from_time}-{to_time}: {e}')
+                r.raise_for_status()
+                data = r.json()
+                if data.get('status') == 1:
+                    for p in _parsear_puntos(data):
+                        key = p['timestamp']
+                        if key not in vistos:
+                            vistos.add(key)
+                            todos_los_puntos.append(p)
+                break  # franja completada
+
+            except Exception as e:
+                intentos += 1
+                espera = 2 ** intentos  # backoff exponencial: 2, 4, 8, 16s
+                log(f'    ⚠ get_history {device_id} {fecha_str} {from_time}-{to_time} (intento {intentos}): {e} — retry en {espera}s')
+                time.sleep(espera)
+
+        time.sleep(0.2)  # pausa entre franjas para no saturar la API
 
     return todos_los_puntos
 
