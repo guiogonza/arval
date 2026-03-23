@@ -95,48 +95,74 @@ def cargar_mapa():
 
 # ─── GET HISTORY ─────────────────────────────────────────────────────────────
 
-def obtener_historia_dia(session, token, device_id, dia: date):
-    """Obtiene los puntos GPS de un dispositivo para un día específico."""
-    fecha_str = dia.strftime('%Y-%m-%d')
-    try:
-        r = session.post(SRC_BASE + '/get_history', json={
-            'user_api_hash': token,
-            'device_id'    : device_id,
-            'from_date'    : fecha_str,
-            'to_date'      : fecha_str,
-            'from_time'    : '00:00',
-            'to_time'      : '23:59',
-        }, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-        if data.get('status') != 1:
-            return []
+def _parsear_puntos(data):
+    """Extrae puntos GPS de la respuesta de /get_history."""
+    puntos = []
+    items_top = data.get('items') or []
+    for segmento in items_top:
+        for p in (segmento.get('items') or []):
+            lat   = p.get('latitude') or p.get('lat', 0)
+            lng   = p.get('longitude') or p.get('lng', 0)
+            spd   = p.get('speed', 0) or 0
+            alt   = p.get('altitude', 0) or 0
+            crs   = p.get('course', 0) or 0
+            raw_t = p.get('raw_time') or p.get('time') or ''
+            if lat and lng and raw_t:
+                try:
+                    dt = datetime.strptime(raw_t, '%Y-%m-%d %H:%M:%S')
+                    ts = int(dt.timestamp())
+                except:
+                    ts = int(time.time())
+                puntos.append({
+                    'lat': lat, 'lng': lng, 'speed': spd,
+                    'altitude': alt, 'course': crs, 'timestamp': ts
+                })
+    return puntos
 
-        # Estructura: lista de segmentos, cada uno con items[]
-        puntos = []
-        items_top = data.get('items') or []
-        for segmento in items_top:
-            for p in (segmento.get('items') or []):
-                lat   = p.get('latitude') or p.get('lat', 0)
-                lng   = p.get('longitude') or p.get('lng', 0)
-                spd   = p.get('speed', 0) or 0
-                alt   = p.get('altitude', 0) or 0
-                crs   = p.get('course', 0) or 0
-                raw_t = p.get('raw_time') or p.get('time') or ''
-                if lat and lng and raw_t:
-                    try:
-                        dt = datetime.strptime(raw_t, '%Y-%m-%d %H:%M:%S')
-                        ts = int(dt.timestamp())
-                    except:
-                        ts = int(time.time())
-                    puntos.append({
-                        'lat': lat, 'lng': lng, 'speed': spd,
-                        'altitude': alt, 'course': crs, 'timestamp': ts
-                    })
-        return puntos
-    except Exception as e:
-        log(f'    ⚠ get_history {device_id} {fecha_str}: {e}')
-        return []
+
+# Franjas horarias para evitar truncar si el API tiene límite de registros por request
+FRANJAS_HORARIAS = [
+    ('00:00', '05:59'),
+    ('06:00', '11:59'),
+    ('12:00', '17:59'),
+    ('18:00', '23:59'),
+]
+
+
+def obtener_historia_dia(session, token, device_id, dia: date):
+    """Obtiene los puntos GPS de un dispositivo para un día específico.
+    Divide el día en 4 franjas de 6 horas para evitar el límite de registros por request.
+    """
+    fecha_str = dia.strftime('%Y-%m-%d')
+    todos_los_puntos = []
+    vistos = set()   # deduplicar por timestamp
+
+    for from_time, to_time in FRANJAS_HORARIAS:
+        try:
+            r = session.post(SRC_BASE + '/get_history', json={
+                'user_api_hash': token,
+                'device_id'    : device_id,
+                'from_date'    : fecha_str,
+                'to_date'      : fecha_str,
+                'from_time'    : from_time,
+                'to_time'      : to_time,
+            }, timeout=60)
+            r.raise_for_status()
+            data = r.json()
+            if data.get('status') != 1:
+                continue
+
+            for p in _parsear_puntos(data):
+                key = p['timestamp']
+                if key not in vistos:
+                    vistos.add(key)
+                    todos_los_puntos.append(p)
+
+            time.sleep(0.1)  # pausa mínima entre franjas
+        except Exception as e:
+            log(f'    ⚠ get_history {device_id} {fecha_str} {from_time}-{to_time}: {e}')
+
+    return todos_los_puntos
 
 
 # ─── ENVÍO OSMAND ─────────────────────────────────────────────────────────────
