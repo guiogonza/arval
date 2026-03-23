@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a73e8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>GPS Tracker</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="icon" href="/static/icon-192.png" type="image/png">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            background: #1a73e8;
+            color: white;
+            width: 100%;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: 600;
+        }
+        .container {
+            width: 100%;
+            max-width: 420px;
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 14px;
+            font-size: 1.2em;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+        input[type="text"]:disabled {
+            background: #f0f0f0;
+            color: #999;
+        }
+        .btn-toggle {
+            width: 100%;
+            padding: 18px;
+            font-size: 1.2em;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn-toggle.off {
+            background: #34a853;
+            color: white;
+        }
+        .btn-toggle.off:hover {
+            background: #2d9249;
+        }
+        .btn-toggle.on {
+            background: #ea4335;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+        .btn-toggle.on:hover {
+            background: #d33426;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(234,67,53,0.4); }
+            50% { box-shadow: 0 0 0 12px rgba(234,67,53,0); }
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95em;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            flex-shrink: 0;
+        }
+        .dot.active { background: #34a853; }
+        .dot.error { background: #ea4335; }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .info-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .info-item .value {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: #1a73e8;
+        }
+        .info-item .label {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 4px;
+        }
+        #log {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            max-height: 200px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            color: #0f0;
+            border-radius: 8px;
+            padding: 12px;
+            line-height: 1.5;
+        }
+        .log-entry.error { color: #f44; }
+        .log-entry.info { color: #4af; }
+        .interval-selector {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .interval-btn {
+            flex: 1;
+            min-width: 60px;
+            padding: 10px 8px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: all 0.2s;
+        }
+        .interval-btn.selected {
+            border-color: #1a73e8;
+            background: #e8f0fe;
+            color: #1a73e8;
+        }
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 14px 24px;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.95em;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 90%;
+            text-align: center;
+        }
+        .toast.show { opacity: 1; }
+        .toast.error { background: #ea4335; }
+        .toast.success { background: #34a853; }
+        .toast.warning { background: #f9a825; color: #333; }
+        .btn-toggle:disabled {
+            opacity: 0.6;
+            cursor: wait;
+        }
+        #minimap {
+            width: 100%;
+            height: 200px;
+            border-radius: 8px;
+            margin-top: 12px;
+            z-index: 0;
+        }
+        .btn-install {
+            width: 100%;
+            padding: 14px;
+            font-size: 1em;
+            font-weight: 600;
+            border: 2px solid #1a73e8;
+            border-radius: 12px;
+            background: white;
+            color: #1a73e8;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-install:hover {
+            background: #e8f0fe;
+        }
+        .btn-install.installed {
+            border-color: #34a853;
+            color: #34a853;
+            cursor: default;
+        }
+        .bg-banner {
+            background: #fff3cd;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.82em;
+            color: #856404;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .bg-banner.ok {
+            background: #d4edda;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">📡 GPS Tracker → WOX</div>
+    <div class="toast" id="toast"></div>
+
+    <div class="container">
+        <!-- Instalar PWA -->
+        <div id="installCard" style="display:none;">
+            <button id="installBtn" class="btn-install" onclick="installPWA()">
+                📲 Instalar App en dispositivo
+            </button>
+        </div>
+        <div id="installedBadge" style="display:none;">
+            <div class="bg-banner ok">✅ App instalada — funciona como aplicación nativa</div>
+        </div>
+
+        <!-- Placa -->
+        <div class="card">
+            <label>Placa del vehículo</label>
+            <input type="text" id="placa" placeholder="ABC123" maxlength="10" autocomplete="off">
+        </div>
+
+        <!-- Intervalo -->
+        <div class="card">
+            <label>Intervalo de envío</label>
+            <div class="interval-selector">
+                <button class="interval-btn" data-interval="5000">5s</button>
+                <button class="interval-btn selected" data-interval="10000">10s</button>
+                <button class="interval-btn" data-interval="30000">30s</button>
+                <button class="interval-btn" data-interval="60000">1m</button>
+            </div>
+        </div>
+
+        <!-- Botón activar/desactivar -->
+        <button id="toggleBtn" class="btn-toggle off" onclick="toggle()">
+            ▶ Activar Transmisión
+        </button>
+
+        <!-- Estado -->
+        <div class="card">
+            <label>Estado</label>
+            <div class="status">
+                <div class="dot" id="statusDot"></div>
+                <span id="statusText">Inactivo</span>
+            </div>
+            <div id="locationInfo" style="margin-top:12px; display:none;">
+                <div style="font-size:0.85em; color:#555; display:flex; align-items:flex-start; gap:6px; margin-bottom:6px;">
+                    <span>🏙️</span>
+                    <span id="valCity" style="font-weight:600; color:#1a73e8;">--</span>
+                </div>
+                <div style="font-size:0.82em; color:#555; display:flex; align-items:flex-start; gap:6px;">
+                    <span>📍</span>
+                    <span id="valAddress" style="color:#333;">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mini Mapa -->
+        <div class="card">
+            <label>Ubicación</label>
+            <div id="minimap"></div>
+        </div>
+
+        <!-- Info GPS -->
+        <div class="card">
+            <label>Última posición</label>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="value" id="valLat">--</div>
+                    <div class="label">Latitud</div>
+                </div>
+                <div class="info-item">
+                    <div class="value" id="valLon">--</div>
+                    <div class="label">Longitud</div>
+                </div>
+                <div class="info-item">
+                    <div class="value" id="valSpeed">--</div>
+                    <div class="label">Velocidad</div>
+                </div>
+                <div class="info-item">
+                    <div class="value" id="valCount">0</div>
+                    <div class="label">Envíos</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log -->
+        <!-- Background info -->
+        <div id="bgInfo" style="display:none;"></div>
+
+        <div class="card">
+            <label>Log</label>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let active = false;
+        let watchId = null;
+        let sendInterval = null;
+        let intervalMs = 10000;
+        let lastPos = null;
+        let sendCount = 0;
+        let deviceImei = null;
+        let lastGeocodeLat = null;
+        let lastGeocodeLon = null;
+        let wakeLock = null;
+        let deferredInstallPrompt = null;
+        let lastSentLat = null;
+        let lastSentLon = null;
+        const MIN_DISTANCE_M = 50;
+        let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+
+        // ===== PWA Install =====
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+            || window.navigator.standalone === true;
+
+        if (isStandalone) {
+            document.getElementById('installedBadge').style.display = 'block';
+        }
+
+        window.addEventListener('beforeinstallprompt', e => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+            if (!isStandalone) {
+                document.getElementById('installCard').style.display = 'block';
+            }
+        });
+
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('installCard').style.display = 'none';
+            document.getElementById('installedBadge').style.display = 'block';
+            deferredInstallPrompt = null;
+            addLog('info', '✓ App instalada correctamente');
+        });
+
+        async function installPWA() {
+            if (!deferredInstallPrompt) return;
+            deferredInstallPrompt.prompt();
+            const { outcome } = await deferredInstallPrompt.userChoice;
+            if (outcome === 'accepted') {
+                addLog('info', 'Instalación aceptada');
+            }
+            deferredInstallPrompt = null;
+            document.getElementById('installCard').style.display = 'none';
+        }
+
+        // ===== Wake Lock (mantener pantalla activa) =====
+        async function requestWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    if (active) requestWakeLock(); // re-acquire si sigue activo
+                });
+                updateBgInfo();
+            } catch (e) {
+                console.warn('Wake Lock falló:', e);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        // Re-acquire wake lock cuando la pestaña vuelve a ser visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && active) {
+                requestWakeLock();
+            }
+        });
+
+        function updateBgInfo() {
+            const el = document.getElementById('bgInfo');
+            if (!active) { el.style.display = 'none'; return; }
+            const hasWL = wakeLock !== null;
+            el.style.display = 'block';
+            el.innerHTML = `<div class="bg-banner ${hasWL ? 'ok' : ''}">
+                ${hasWL ? '🔒' : '⚠️'}
+                ${hasWL ? 'Pantalla bloqueada — GPS activo en segundo plano' : 'Wake Lock no disponible — mantén la pantalla encendida'}
+            </div>`;
+        }
+
+        const btn = document.getElementById('toggleBtn');
+        const placaInput = document.getElementById('placa');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const logDiv = document.getElementById('log');
+
+        // Intervalo selector
+        document.querySelectorAll('.interval-btn').forEach(b => {
+            b.addEventListener('click', () => {
+                document.querySelectorAll('.interval-btn').forEach(x => x.classList.remove('selected'));
+                b.classList.add('selected');
+                intervalMs = parseInt(b.dataset.interval);
+                if (active) {
+                    clearInterval(sendInterval);
+                    sendInterval = setInterval(sendPosition, intervalMs);
+                    addLog('info', `Intervalo cambiado a ${intervalMs/1000}s`);
+                }
+            });
+        });
+
+        // Cargar placa guardada
+        const savedPlaca = localStorage.getItem('tracker_placa');
+        if (savedPlaca) placaInput.value = savedPlaca;
+
+        function showToast(msg, type, duration) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show ' + type;
+            clearTimeout(t._timer);
+            t._timer = setTimeout(() => t.classList.remove('show'), duration || 4000);
+        }
+
+        async function toggle() {
+            if (!active) {
+                const placa = placaInput.value.trim().toUpperCase();
+                if (!placa) {
+                    showToast('Ingrese la placa del vehículo', 'warning');
+                    placaInput.focus();
+                    return;
+                }
+                // Validar que la placa exista en la plataforma
+                btn.disabled = true;
+                btn.textContent = '⏳ Verificando placa...';
+                addLog('info', `Verificando placa ${placa}...`);
+                try {
+                    const resp = await fetch('/api/check_placa', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({placa})
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) {
+                        showToast('Error al verificar: ' + (data.error || resp.status), 'error');
+                        addLog('error', `Error verificación: ${data.error}`);
+                        btn.disabled = false;
+                        btn.textContent = '▶ Activar Transmisión';
+                        return;
+                    }
+                    if (!data.exists) {
+                        showToast(`⚠️ Placa ${placa} NO está en la plataforma`, 'error', 5000);
+                        addLog('error', `Placa ${placa} no encontrada en plataforma`);
+                        btn.disabled = false;
+                        btn.textContent = '▶ Activar Transmisión';
+                        return;
+                    }
+                    addLog('info', `✓ Placa ${placa} verificada en plataforma`);
+                    deviceImei = data.imei || placa;
+                    addLog('info', `  ID dispositivo: ${deviceImei}`);
+                    showToast(`✓ Placa ${placa} encontrada`, 'success', 2000);
+                } catch (e) {
+                    showToast('Sin conexión al servidor', 'error');
+                    addLog('error', `Error red: ${e.message}`);
+                    btn.disabled = false;
+                    btn.textContent = '▶ Activar Transmisión';
+                    return;
+                }
+                btn.disabled = false;
+                startTracking(placa);
+            } else {
+                stopTracking();
+            }
+        }
+
+        function startTracking(placa) {
+            if (!navigator.geolocation) {
+                alert('Su navegador no soporta geolocalización');
+                return;
+            }
+
+            localStorage.setItem('tracker_placa', placa);
+            active = true;
+            sendCount = 0;
+            document.getElementById('valCount').textContent = '0';
+
+            btn.classList.remove('off');
+            btn.classList.add('on');
+            btn.textContent = '⏹ Desactivar Transmisión';
+            placaInput.disabled = true;
+            statusDot.classList.add('active');
+            statusDot.classList.remove('error');
+            statusText.textContent = 'Obteniendo GPS...';
+
+            addLog('info', `Transmisión iniciada: ${placa}`);
+            requestWakeLock();
+            updateBgInfo();
+
+            // Notificación persistente (Android)
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    navigator.serviceWorker.ready.then(reg => {
+                        reg.showNotification('GPS Tracker activo', {
+                            body: `Transmitiendo ${placa} cada ${intervalMs/1000}s`,
+                            icon: '/static/icon-192.png',
+                            tag: 'gps-active',
+                            ongoing: true,
+                            requireInteraction: true
+                        });
+                    });
+                } catch(e) {}
+            }
+
+            watchId = navigator.geolocation.watchPosition(
+                pos => {
+                    lastPos = pos;
+                    updateDisplay(pos);
+                    if (sendCount === 0) {
+                        sendPosition();
+                    }
+                },
+                err => {
+                    addLog('error', `Error GPS: ${err.message}`);
+                    statusDot.classList.remove('active');
+                    statusDot.classList.add('error');
+                    statusText.textContent = 'Error GPS';
+                },
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
+
+            sendInterval = setInterval(sendPosition, intervalMs);
+        }
+
+        function stopTracking() {
+            active = false;
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            if (sendInterval) {
+                clearInterval(sendInterval);
+                sendInterval = null;
+            }
+
+            btn.classList.remove('on');
+            btn.classList.add('off');
+            btn.textContent = '▶ Activar Transmisión';
+            placaInput.disabled = false;
+            statusDot.classList.remove('active', 'error');
+            statusText.textContent = 'Inactivo';
+            lastPos = null;
+            releaseWakeLock();
+            updateBgInfo();
+
+            // Cerrar notificación
+            try {
+                navigator.serviceWorker.ready.then(reg => {
+                    reg.getNotifications({tag: 'gps-active'}).then(ns => ns.forEach(n => n.close()));
+                });
+            } catch(e) {}
+
+            addLog('info', 'Transmisión detenida');
+        }
+
+        function updateDisplay(pos) {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            document.getElementById('valLat').textContent = lat.toFixed(6);
+            document.getElementById('valLon').textContent = lon.toFixed(6);
+            const spd = pos.coords.speed != null ? (pos.coords.speed * 3.6).toFixed(1) : '0';
+            document.getElementById('valSpeed').textContent = spd + ' km/h';
+            updateMap(lat, lon);
+            reverseGeocode(lat, lon);
+        }
+
+        function reverseGeocode(lat, lon) {
+            // Solo geocodificar si se movio >50m desde la ultima vez
+            if (lastGeocodeLat !== null) {
+                const dLat = lat - lastGeocodeLat;
+                const dLon = lon - lastGeocodeLon;
+                const dist = Math.sqrt(dLat*dLat + dLon*dLon) * 111320;
+                if (dist < 50) return;
+            }
+            lastGeocodeLat = lat;
+            lastGeocodeLon = lon;
+            fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=18&addressdetails=1`, {
+                headers: {'Accept-Language': 'es'}
+            })
+            .then(r => r.json())
+            .then(data => {
+                const a = data.address || {};
+                const city = a.city || a.town || a.village || a.municipality || a.county || '--';
+                const road = a.road || a.pedestrian || '';
+                const house = a.house_number || '';
+                const suburb = a.suburb || a.neighbourhood || '';
+                const addr = [road + (house ? ' ' + house : ''), suburb].filter(Boolean).join(', ') || data.display_name || '--';
+                document.getElementById('valCity').textContent = city;
+                document.getElementById('valAddress').textContent = addr;
+                document.getElementById('locationInfo').style.display = 'block';
+            })
+            .catch(() => {});
+        }
+
+        async function sendPosition() {
+            if (!active || !lastPos) return;
+
+            const placa = placaInput.value.trim().toUpperCase();
+            const { latitude: lat, longitude: lon, speed, accuracy, heading } = lastPos.coords;
+            const speedKmh = speed != null ? speed * 3.6 : 0;
+
+            // Solo enviar si se movio >50m o es el primer envio
+            if (lastSentLat !== null) {
+                const dLat = lat - lastSentLat;
+                const dLon = lon - lastSentLon;
+                const dist = Math.sqrt(dLat*dLat + dLon*dLon) * 111320;
+                if (dist < MIN_DISTANCE_M) {
+                    // Intentar enviar cola offline aunque no se haya movido
+                    flushOfflineQueue();
+                    return;
+                }
+            }
+
+            const payload = {
+                placa,
+                device_id: deviceImei || placa,
+                lat: parseFloat(lat.toFixed(6)),
+                lon: parseFloat(lon.toFixed(6)),
+                speed: parseFloat(speedKmh.toFixed(1)),
+                accuracy: accuracy != null ? parseFloat(accuracy.toFixed(1)) : null,
+                heading: heading != null ? parseFloat(heading.toFixed(1)) : null,
+            };
+
+            try {
+                const resp = await fetch('/api/transmit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    sendCount++;
+                    lastSentLat = lat;
+                    lastSentLon = lon;
+                    document.getElementById('valCount').textContent = sendCount;
+                    statusText.textContent = `Transmitiendo (${sendCount})`;
+                    addLog(null, `\u2713 ${lat.toFixed(5)}, ${lon.toFixed(5)} \u2192 WOX`);
+                    // Enviar cola pendiente
+                    flushOfflineQueue();
+                } else {
+                    addLog('error', `\u2717 Error: ${data.error || data.status}`);
+                }
+            } catch (e) {
+                // Sin red: guardar en cola offline
+                payload.timestamp = Date.now();
+                offlineQueue.push(payload);
+                saveOfflineQueue();
+                lastSentLat = lat;
+                lastSentLon = lon;
+                addLog('error', `\u2717 Sin red \u2014 guardado offline (${offlineQueue.length} pendientes)`);
+                statusText.textContent = `Offline (${offlineQueue.length} pendientes)`;
+            }
+        }
+
+        function saveOfflineQueue() {
+            // Limitar a 500 puntos max (~8h a intervalo 60s)
+            if (offlineQueue.length > 500) offlineQueue = offlineQueue.slice(-500);
+            localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+        }
+
+        async function flushOfflineQueue() {
+            if (offlineQueue.length === 0) return;
+            const batch = offlineQueue.splice(0, 5); // enviar de a 5
+            let sent = 0;
+            for (const item of batch) {
+                try {
+                    const r = await fetch('/api/transmit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(item)
+                    });
+                    const d = await r.json();
+                    if (d.ok) sent++;
+                    else offlineQueue.unshift(item);
+                } catch {
+                    offlineQueue.unshift(item);
+                    break;
+                }
+            }
+            saveOfflineQueue();
+            if (sent > 0) {
+                addLog('info', `\u2713 ${sent} puntos offline enviados (${offlineQueue.length} restantes)`);
+            }
+        }
+
+        function addLog(type, msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry' + (type ? ` ${type}` : '');
+            const now = new Date().toLocaleTimeString();
+            entry.textContent = `[${now}] ${msg}`;
+            logDiv.prepend(entry);
+            // Limitar a 50 entradas
+            while (logDiv.children.length > 50) {
+                logDiv.removeChild(logDiv.lastChild);
+            }
+        }
+
+        // Mapa Leaflet
+        const mapScript = document.createElement('script');
+        mapScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        mapScript.onload = initMap;
+        document.head.appendChild(mapScript);
+
+        let minimap, carMarker;
+        function initMap() {
+            minimap = L.map('minimap', {zoomControl: false, attributionControl: false}).setView([4.65, -74.1], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18}).addTo(minimap);
+            const carIcon = L.divIcon({
+                html: '<div style="font-size:28px;">🚗</div>',
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
+                className: ''
+            });
+            carMarker = L.marker([4.65, -74.1], {icon: carIcon}).addTo(minimap);
+        }
+
+        function updateMap(lat, lon) {
+            if (!minimap) return;
+            carMarker.setLatLng([lat, lon]);
+            minimap.setView([lat, lon], 16);
+        }
+
+        // Registrar Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/static/sw.js')
+                .then(() => addLog('info', 'PWA lista'))
+                .catch(e => console.warn('SW:', e));
+        }
+    </script>
+</body>
+</html>

@@ -79,6 +79,19 @@ services:
     networks:
       - geotab_network
 
+  # PWA GPS Tracker → GPSWox (pruebas)
+  pwa_tracker:
+    build: ./pwa_tracker
+    container_name: pwa_tracker
+    ports:
+      - "5051:5050"
+    environment:
+      GPSWOX_API_URL: "http://173.212.203.163/api"
+      GPSWOX_OSMAND_URL: "http://173.212.203.163:6055/"
+    restart: unless-stopped
+    networks:
+      - geotab_network
+
 volumes:
   postgres_data:
 
