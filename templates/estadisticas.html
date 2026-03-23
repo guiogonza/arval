@@ -539,7 +539,8 @@
                 defaultDate: hoy,
                 maxDate: 'today',
                 allowInput: false,
-                disableMobile: true
+                disableMobile: true,
+                onChange: () => cargarEstadisticas()
             });
             flatpickr('#fechaFin', {
                 locale: 'es',
@@ -547,7 +548,8 @@
                 defaultDate: hoy,
                 maxDate: 'today',
                 allowInput: false,
-                disableMobile: true
+                disableMobile: true,
+                onChange: () => cargarEstadisticas()
             });
 
             document.getElementById('fechaInicio').value = hoy;
