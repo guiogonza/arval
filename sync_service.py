@@ -13,7 +13,8 @@ import os
 # Importar módulo de base de datos
 from database import (
     get_connection, guardar_ubicacion, guardar_viaje,
-    guardar_exceso_velocidad, actualizar_resumen_diario, log_sync, init_database
+    guardar_reporte_gps, guardar_exceso_velocidad,
+    actualizar_resumen_diario, log_sync, init_database
 )
 
 load_dotenv()
@@ -154,7 +155,8 @@ class SyncService:
                         # Obtener datos del viaje (usando .get() para diccionarios)
                         start_time = trip.get('start')
                         stop_time = trip.get('stop')
-                        distance = (trip.get('distance') or 0) / 1000  # convertir a km
+                        # Geotab devuelve distance en km (NO dividir por 1000)
+                        distance = trip.get('distance') or 0
                         
                         duracion = 0
                         driving_dur = trip.get('drivingDuration')
@@ -167,14 +169,33 @@ class SyncService:
                         
                         # Obtener velocidad máxima del viaje (ya viene en el Trip)
                         vel_max = trip.get('maximumSpeed', 0) or 0
+
+                        # Coordenadas de inicio y fin del viaje
+                        lat_ini = trip.get('startLatitude') or 0
+                        lng_ini = trip.get('startLongitude') or 0
+                        lat_fin = trip.get('stopLatitude') or 0
+                        lng_fin = trip.get('stopLongitude') or 0
                         
                         # Guardar viaje
                         guardar_viaje(
                             disp['id'], disp['placa'], str(fecha), i,
                             start_time, stop_time, distance, duracion, vel_max,
-                            0, 0, 0, 0
+                            lat_ini, lng_ini, lat_fin, lng_fin
                         )
                         total_viajes += 1
+
+                        # Guardar puntos GPS del viaje en reportes_gps
+                        # (inicio y fin) para que total_reportes no sea 0
+                        if lat_ini and lng_ini:
+                            guardar_reporte_gps(
+                                disp['id'], disp['placa'], str(fecha),
+                                lat_ini, lng_ini, 0, start_time, True
+                            )
+                        if lat_fin and lng_fin:
+                            guardar_reporte_gps(
+                                disp['id'], disp['placa'], str(fecha),
+                                lat_fin, lng_fin, 0, stop_time, False
+                            )
                         
                         # Detectar exceso de velocidad basado en velocidad máxima del viaje
                         if vel_max > LIMITE_VELOCIDAD:

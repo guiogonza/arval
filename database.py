@@ -213,6 +213,19 @@ def guardar_viaje(dispositivo_id, placa, fecha, viaje_num, hora_inicio, hora_fin
     conn.close()
 
 
+def guardar_reporte_gps(dispositivo_id, placa, fecha, lat, lng, velocidad, fecha_gps, ignicion):
+    """Guarda un punto GPS en reportes_gps"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO reportes_gps (dispositivo_id, placa, fecha, latitud, longitud, velocidad, fecha_gps, ignicion)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    ''', (dispositivo_id, placa, fecha, lat, lng, velocidad, fecha_gps, 1 if ignicion else 0))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+
 def guardar_exceso_velocidad(dispositivo_id, placa, fecha, velocidad, lat, lng, fecha_gps, limite=80):
     """Guarda un exceso de velocidad"""
     conn = get_connection()
