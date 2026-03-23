@@ -307,6 +307,8 @@ def enviar_posiciones_live(client: mygeotab.API, catalogo: dict):
             fromDate=desde,
             toDate=ahora,
         )
+    except mygeotab.exceptions.AuthenticationException:
+        raise  # dejar que el loop principal maneje la re-autenticación
     except Exception as e:
         print(f"  ! Error obteniendo LogRecord: {e}")
         return 0

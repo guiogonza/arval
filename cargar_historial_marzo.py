@@ -16,6 +16,7 @@ ENDPOINTS CONFIRMADOS:
   GET  :6055/?id=IMEI&lat=X&lon=Y&speed=S&bearing=B&altitude=A&timestamp=T
 """
 
+import os
 import requests
 import json
 import time
@@ -28,8 +29,8 @@ from datetime import datetime, timedelta, date
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 SRC_BASE     = 'https://plataforma.sistemagps.online/api'
-SRC_EMAIL    = 'gerencia@rastrear.com.co'
-SRC_PASS     = 'a791025*'
+SRC_EMAIL    = os.getenv('PLATAFORMA_EMAIL',    'gerencia@rastrear.com.co')
+SRC_PASS     = os.getenv('PLATAFORMA_PASSWORD', 'a791025*')
 DST_OSMAND   = 'http://173.212.203.163:6055'
 DST_BASE     = 'http://173.212.203.163/api'
 DST_EMAIL    = 'gerencia@rastrear.com.co'

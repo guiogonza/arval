@@ -17,6 +17,7 @@ TASK SCHEDULER (alternativa sin privilegios admin):
 """
 
 import sys
+import os
 import time
 import json
 import asyncio
@@ -30,12 +31,12 @@ from datetime import datetime, timedelta, date, timezone
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 SRC_BASE   = 'https://plataforma.sistemagps.online/api'
-SRC_EMAIL  = 'gerencia@rastrear.com.co'
-SRC_PASS   = 'a791025*'
+SRC_EMAIL  = os.getenv('PLATAFORMA_EMAIL',  'gerencia@rastrear.com.co')
+SRC_PASS   = os.getenv('PLATAFORMA_PASSWORD', 'a791025*')
 DST_OSMAND = 'http://173.212.203.163:6055'
 DST_BASE   = 'http://173.212.203.163/api'
-DST_EMAIL  = 'gerencia@rastrear.com.co'
-DST_PASS   = 'Colombias1*'
+DST_EMAIL  = os.getenv('DST_EMAIL',    'gerencia@rastrear.com.co')
+DST_PASS   = os.getenv('DST_PASSWORD', 'Colombias1*')
 MAP_FILE   = 'migracion_mapa.json'
 LOG_FILE   = 'historial_out.txt'
 ERR_FILE   = 'historial_err.txt'

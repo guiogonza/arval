@@ -92,6 +92,41 @@ services:
     networks:
       - geotab_network
 
+  # Sync diario plataforma.sistemagps.online → 173.212.203.163 (1AM GMT-5)
+  sync_diario:
+    build: .
+    container_name: geotab_sync_diario
+    command: python sync_diario.py
+    environment:
+      PLATAFORMA_EMAIL: ${PLATAFORMA_EMAIL:-gerencia@rastrear.com.co}
+      PLATAFORMA_PASSWORD: ${PLATAFORMA_PASSWORD:-a791025*}
+      DST_EMAIL: ${DST_EMAIL:-gerencia@rastrear.com.co}
+      DST_PASSWORD: ${DST_PASSWORD:-Colombias1*}
+      PYTHONUNBUFFERED: 1
+      PYTHONIOENCODING: utf-8
+    volumes:
+      - ./migracion_mapa.json:/app/migracion_mapa.json:ro
+    restart: unless-stopped
+    networks:
+      - geotab_network
+
+  # Carga histórica marzo plataforma → 173.212.203.163 (corre una vez y termina)
+  historial_marzo:
+    build: .
+    container_name: geotab_historial_marzo
+    command: python cargar_historial_marzo.py
+    environment:
+      PLATAFORMA_EMAIL: ${PLATAFORMA_EMAIL:-gerencia@rastrear.com.co}
+      PLATAFORMA_PASSWORD: ${PLATAFORMA_PASSWORD:-a791025*}
+      PYTHONUNBUFFERED: 1
+      PYTHONIOENCODING: utf-8
+    volumes:
+      - ./migracion_mapa.json:/app/migracion_mapa.json
+      - ./historial_progreso.txt:/app/historial_progreso.txt
+    restart: "no"
+    networks:
+      - geotab_network
+
 volumes:
   postgres_data:
 
