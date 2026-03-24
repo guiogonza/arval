@@ -50,3 +50,7 @@ plataforma_sync.log
 
 historial_out.txt
 historial_err.txt
+historial_progreso.json
+
+# Reportes generados
+*.xlsx
