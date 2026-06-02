@@ -1,332 +1,448 @@
-"""
-FASE 3 — Sincronización automática diaria
-  Corre a la 1:00 AM GMT-5 (06:00 UTC)
-  Descarga el día ANTERIOR del fuente y lo sube al destino
+﻿"""
+sync_diario.py
+────────────────────────────────────────────────────────────────
+Sincronización diaria automática GPS plataforma → GPSWox
+Corre a la 01:00 AM GMT-5 (06:00 UTC) cada día.
+INSERT directo en MySQL (gpswox_traccar.positions_N).
 
 EJECUCIÓN:
-  python sync_diario.py              → loop infinito (proceso permanente)
-  python sync_diario.py --ahora     → ejecuta una sola vez inmediatamente (debug)
-  python sync_diario.py --fecha 2026-03-20  → procesa una fecha específica
-
-INSTALAR COMO SERVICIO WINDOWS:
-  pip install pywin32
-  python sync_diario.py --instalar-servicio   (requiere privilegios admin)
-
-TASK SCHEDULER (alternativa sin privilegios admin):
-  El script crea la tarea automáticamente si se ejecuta con --programar-tarea
+  python sync_diario.py               → scheduler (loop infinito)
+  python sync_diario.py --ahora       → ejecuta una vez (día anterior)
+  python sync_diario.py --fecha 2026-05-10  → fecha específica
 """
 
-import sys
-import os
-import time
-import json
-import asyncio
-import aiohttp
-import requests
-import argparse
+import sys, os, time, threading, argparse
+from datetime import datetime, timedelta, date, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from datetime import datetime, timedelta, date, timezone
+
+try:
+    import pymysql
+    import pymysql.cursors
+except ImportError:
+    import subprocess
+    subprocess.run([sys.executable, "-m", "pip", "install", "pymysql", "-q"], check=True)
+    import pymysql
+    import pymysql.cursors
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
-SRC_BASE   = 'https://plataforma.sistemagps.online/api'
-SRC_EMAIL  = os.getenv('PLATAFORMA_EMAIL',  'gerencia@rastrear.com.co')
-SRC_PASS   = os.getenv('PLATAFORMA_PASSWORD', 'a791025*')
-DST_OSMAND = 'http://173.212.203.163:6055'
-DST_BASE   = 'http://173.212.203.163/api'
-DST_EMAIL  = os.getenv('DST_EMAIL',    'gerencia@rastrear.com.co')
-DST_PASS   = os.getenv('DST_PASSWORD', 'Colombias1*')
-MAP_FILE   = 'migracion_mapa.json'
-LOG_FILE   = 'historial_out.txt'
-ERR_FILE   = 'historial_err.txt'
+SRC_BASE  = "https://plataforma.sistemagps.online/api"
+SRC_EMAIL = os.getenv("PLATAFORMA_EMAIL",    "gerencia@rastrear.com.co")
+SRC_PASS  = os.getenv("PLATAFORMA_PASSWORD", "")
 
-# Hora de ejecución: 1:00 AM GMT-5 = 06:00 UTC
-HORA_UTC_EJECUCION = 6    # 06:00 UTC = 01:00 GMT-5
-MINUTO_EJECUCION   = 0
+DB_HOST    = "127.0.0.1"
+DB_PORT    = 3306
+DB_USER    = os.getenv("GPSWOX_DB_USER", "root")
+DB_PASS    = os.getenv("GPSWOX_DB_PASSWORD", "")
+DB_TRACCAR = "gpswox_traccar"
+DB_WEB     = "gpswox_web"
 
-MAX_DEV_PARALELO   = 4
-MAX_OSMAND_PAR     = 20
-PAUSA_ENTRE_DEVS   = 0.5
-PAUSA_ENTRE_DIAS   = 0.3
+HORA_UTC   = 6
+MINUTO_UTC = 0
+
+MAX_WORKERS   = 8
+SRC_SEM_LIMIT = 4
+
+LOG_FILE = "/root/sync_gps/sync_diario.log"
+
+FRANJAS = [
+    ("00:00", "05:59"),
+    ("06:00", "11:59"),
+    ("12:00", "17:59"),
+    ("18:00", "23:59"),
+]
 # ─────────────────────────────────────────────────────────────────────────────
+
+_src_sem = threading.Semaphore(SRC_SEM_LIMIT)
 
 
 def make_session():
     s = requests.Session()
-    s.mount('http://',  HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)))
-    s.mount('https://', HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)))
+    s.mount("https://", HTTPAdapter(max_retries=Retry(total=4, backoff_factor=1.5)))
+    s.mount("http://",  HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1)))
     return s
 
 
-def login(session, base, email, pw):
-    r = session.post(base + '/login', json={'email': email, 'password': pw}, timeout=30)
-    r.raise_for_status()
-    return r.json()['user_api_hash']
+def log(msg: str, error: bool = False):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    # stdout ya va al log via redireccion crontab (no escribir doble)
+    print(line, flush=True)
 
 
-def log(msg, error=False):
-    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    line = f'[{ts}] {msg}'
-    print(line)
-    archivo = ERR_FILE if error else LOG_FILE
+# ─── MYSQL ────────────────────────────────────────────────────────────────────
+
+def _conn(db_name: str):
+    return pymysql.connect(
+        host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS,
+        database=db_name, charset="utf8mb4",
+        cursorclass=pymysql.cursors.Cursor, autocommit=False,
+        connect_timeout=10,
+    )
+
+
+def build_imei_map() -> dict:
+    db = _conn(DB_WEB)
+    mapa = {}
     try:
-        with open(archivo, 'a', encoding='utf-8') as f:
-            f.write(line + '\n')
-    except:
-        pass
-
-
-def cargar_mapa():
-    try:
-        with open(MAP_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-
-
-# ─── GET HISTORY + OSMAND ──────────────────────────────────────────────────
-
-def obtener_historia_dia(session, token, device_id, dia: date):
-    """Puntos GPS de un dispositivo para un día dado."""
-    fecha_str = dia.strftime('%Y-%m-%d')
-    try:
-        r = session.post(SRC_BASE + '/get_history', json={
-            'user_api_hash': token,
-            'device_id'    : device_id,
-            'from_date'    : fecha_str,
-            'to_date'      : fecha_str,
-            'from_time'    : '00:00',
-            'to_time'      : '23:59',
-        }, timeout=60)
-        r.raise_for_status()
-        data = r.json()
-        if data.get('status') != 1:
-            return []
-        puntos = []
-        for segmento in (data.get('items') or []):
-            for p in (segmento.get('items') or []):
-                lat  = p.get('latitude') or p.get('lat', 0)
-                lng  = p.get('longitude') or p.get('lng', 0)
-                spd  = p.get('speed', 0) or 0
-                alt  = p.get('altitude', 0) or 0
-                crs  = p.get('course', 0) or 0
-                raw_t = p.get('raw_time') or p.get('time') or ''
-                if lat and lng and raw_t:
-                    try:
-                        dt = datetime.strptime(raw_t, '%Y-%m-%d %H:%M:%S')
-                        ts = int(dt.timestamp())
-                    except:
-                        ts = int(time.time())
-                    puntos.append({'lat': lat, 'lng': lng, 'speed': spd,
-                                   'altitude': alt, 'course': crs, 'timestamp': ts})
-        return puntos
-    except Exception as e:
-        log(f'  ⚠ get_history dev={device_id} {fecha_str}: {e}', error=True)
-        return []
-
-
-async def enviar_puntos_osmand(imei, puntos, aio_session):
-    """Envío paralelo de puntos GPS via OsmAnd."""
-    enviados = 0
-    errores  = 0
-    sem = asyncio.Semaphore(MAX_OSMAND_PAR)
-
-    async def _uno(p):
-        nonlocal enviados, errores
-        url = (f"{DST_OSMAND}/?id={imei}&lat={p['lat']}&lon={p['lng']}"
-               f"&speed={p['speed']}&bearing={p['course']}"
-               f"&altitude={p['altitude']}&timestamp={p['timestamp']}")
-        async with sem:
-            try:
-                async with aio_session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    if resp.status == 200:
-                        enviados += 1
-                    else:
-                        errores += 1
-            except:
-                errores += 1
-
-    await asyncio.gather(*[_uno(p) for p in puntos])
-    return enviados, errores
-
-
-def procesar_dispositivo_dia(args):
-    """Thread worker: procesa un dispositivo para el día indicado."""
-    nombre, imei, dev_id_src, token_src, dia = args
-    session = make_session()
-    puntos = obtener_historia_dia(session, token_src, dev_id_src, dia)
-    if not puntos:
-        return nombre, imei, 0, 0, 0
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    connector = aiohttp.TCPConnector(limit=MAX_OSMAND_PAR, loop=loop)
-    try:
-        async def _run():
-            async with aiohttp.ClientSession(connector=connector) as aio:
-                return await enviar_puntos_osmand(imei, puntos, aio)
-        env, err = loop.run_until_complete(_run())
+        with db.cursor() as cur:
+            cur.execute("SELECT id, uniqueId FROM traccar_devices")
+            for row in cur.fetchall():
+                mapa[str(row[1]).strip()] = int(row[0])
     finally:
-        loop.close()
-
-    time.sleep(PAUSA_ENTRE_DEVS)
-    return nombre, imei, len(puntos), env, err
+        db.close()
+    return mapa
 
 
-# ─── SINCRONIZACIÓN DE UN DÍA ─────────────────────────────────────────────
+def ensure_table(traccar_id: int, db):
+    tbl = f"positions_{traccar_id}"
+    with db.cursor() as cur:
+        cur.execute(f"SHOW TABLES LIKE '{tbl}'")
+        exists = cur.fetchone()
+        if not exists:
+            cur.execute(f"""
+            CREATE TABLE `{tbl}` (
+              `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+              `device_id`      bigint unsigned NOT NULL DEFAULT {traccar_id},
+              `altitude`       double          DEFAULT NULL,
+              `course`         double          DEFAULT NULL,
+              `latitude`       double          DEFAULT NULL,
+              `longitude`      double          DEFAULT NULL,
+              `other`          text,
+              `power`          double          DEFAULT NULL,
+              `speed`          double          DEFAULT NULL,
+              `time`           datetime        DEFAULT NULL,
+              `device_time`    datetime        DEFAULT NULL,
+              `server_time`    datetime        DEFAULT NULL,
+              `sensors_values` text,
+              `valid`          tinyint         DEFAULT NULL,
+              `distance`       double          DEFAULT NULL,
+              `protocol`       varchar(20)     DEFAULT NULL,
+              PRIMARY KEY (`id`),
+              KEY `device_id`  (`device_id`),
+              KEY `time`       (`time`),
+              KEY `server_time`(`server_time`),
+              KEY `speed`      (`speed`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+        else:
+            # Agregar columnas faltantes en tablas auto-creadas por Traccar
+            cur.execute(f"SHOW COLUMNS FROM `{tbl}` LIKE 'device_id'")
+            if not cur.fetchone():
+                cur.execute(
+                    f"ALTER TABLE `{tbl}` ADD COLUMN "
+                    f"`device_id` bigint unsigned NOT NULL DEFAULT {traccar_id} AFTER `id`"
+                )
+            cur.execute(f"SHOW COLUMNS FROM `{tbl}` LIKE 'power'")
+            if not cur.fetchone():
+                cur.execute(
+                    f"ALTER TABLE `{tbl}` ADD COLUMN "
+                    f"`power` double DEFAULT NULL AFTER `other`"
+                )
+    db.commit()
+
+
+def insertar_puntos(traccar_id: int, puntos: list, db) -> int:
+    tbl = f"positions_{traccar_id}"
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    rows = [
+        (
+            traccar_id,
+            p.get("altitude") or 0,
+            p.get("course") or 0,
+            p["lat"],
+            p["lng"],
+            p.get("other") or "",
+            None,
+            p.get("speed") or 0,
+            p["time_utc"],
+            p.get("device_time") or p["time_utc"],
+            now,
+            None,
+            1 if p.get("valid", 1) else 0,
+            p.get("distance") or 0,
+            "plataforma",
+        )
+        for p in puntos
+    ]
+    with db.cursor() as cur:
+        cur.executemany(
+            f"""INSERT INTO `{tbl}`
+            (device_id, altitude, course, latitude, longitude, other, power, speed,
+             time, device_time, server_time, sensors_values, valid, distance, protocol)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            rows,
+        )
+    db.commit()
+    return len(rows)
+
+
+def actualizar_ultimo_pos(traccar_id: int, ultimo: dict, db_web):
+    try:
+        tbl = f"positions_{traccar_id}"
+        with db_web.cursor() as cur:
+            cur.execute("SELECT time, latest_positions FROM traccar_devices WHERE id = %s", (traccar_id,))
+            row = cur.fetchone()
+            cur_time = row[0] if row else None
+            latest_positions_old = row[1] if row and len(row) > 1 else ""
+            cur.execute(
+                f"SELECT id, latitude, longitude, altitude, course, speed, time, device_time, server_time, protocol "
+                f"FROM `{DB_TRACCAR}`.`{tbl}` ORDER BY time DESC, id DESC LIMIT 1"
+            )
+            pos = cur.fetchone()
+        nuevo_time = datetime.strptime(ultimo["time_utc"], "%Y-%m-%d %H:%M:%S")
+        if cur_time and isinstance(cur_time, datetime) and cur_time >= nuevo_time:
+            return
+        if pos:
+            pos_id, lat, lng, altitude, course, speed, pos_time, device_time, server_time, protocol = pos
+        else:
+            pos_id = None
+            lat, lng = ultimo["lat"], ultimo["lng"]
+            altitude, course, speed = ultimo.get("altitude") or 0, ultimo.get("course") or 0, ultimo.get("speed") or 0
+            pos_time = ultimo["time_utc"]
+            device_time = ultimo.get("device_time") or ultimo["time_utc"]
+            server_time = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            protocol = "plataforma"
+        point = f"{float(lat):.6f}/{float(lng):.6f}"
+        tail = [x for x in (latest_positions_old or "").split(";") if x]
+        latest_positions = ";".join(([point] + tail)[:15])
+        with db_web.cursor() as cur:
+            cur.execute(
+                "UPDATE traccar_devices "
+                "SET latestPosition_id = %s, "
+                "lastValidLatitude = %s, lastValidLongitude = %s, "
+                "speed = %s, altitude = %s, course = %s, "
+                "time = %s, device_time = %s, server_time = %s, "
+                "protocol = %s, latest_positions = %s, updated_at = NOW() "
+                "WHERE id = %s",
+                (pos_id, lat, lng, speed or 0, altitude or 0, course or 0,
+                 pos_time, device_time or pos_time, server_time, protocol or "plataforma",
+                 latest_positions, traccar_id),
+            )
+        db_web.commit()
+    except Exception as exc:
+        log(f"  ⚠ latest traccar_device {traccar_id}: {exc}", error=True)
+
+
+# ─── API PLATAFORMA ───────────────────────────────────────────────────────────
+
+def api_login(s) -> str:
+    r = s.post(f"{SRC_BASE}/login",
+               json={"email": SRC_EMAIL, "password": SRC_PASS}, timeout=30)
+    r.raise_for_status()
+    return r.json()["user_api_hash"]
+
+
+def get_devices(s, tok: str) -> list:
+    r = s.post(f"{SRC_BASE}/get_devices", json={"user_api_hash": tok}, timeout=60)
+    r.raise_for_status()
+    out = []
+
+    def _extract(obj):
+        if isinstance(obj, list):
+            for x in obj:
+                _extract(x)
+        elif isinstance(obj, dict):
+            if "device_data" in obj:
+                dd = obj.get("device_data") or {}
+                imei = str(dd.get("imei") or "").strip()
+                if imei:
+                    out.append({"nombre": (obj.get("name") or imei).strip(),
+                                "imei": imei, "device_id": obj.get("id")})
+            if "items" in obj:
+                _extract(obj["items"])
+
+    _extract(r.json())
+    return out
+
+
+def parsear_puntos(data: dict) -> list:
+    puntos = []
+    vistos = set()
+    for seg in (data.get("items") or []):
+        for p in (seg.get("items") or []):
+            lat = p.get("lat") or p.get("latitude") or 0
+            lng = p.get("lng") or p.get("longitude") or 0
+            if not lat or not lng:
+                continue
+            device_time_str = p.get("device_time") or ""
+            raw_time_str    = p.get("raw_time") or ""
+            if device_time_str:
+                time_utc = device_time_str
+            elif raw_time_str:
+                try:
+                    dt = datetime.strptime(raw_time_str, "%Y-%m-%d %H:%M:%S")
+                    time_utc = (dt + timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    time_utc = raw_time_str
+            else:
+                continue
+            if time_utc in vistos:
+                continue
+            vistos.add(time_utc)
+            puntos.append({
+                "lat": lat, "lng": lng,
+                "speed": p.get("speed") or 0, "altitude": p.get("altitude") or 0,
+                "course": p.get("course") or 0, "time_utc": time_utc,
+                "device_time": device_time_str or time_utc,
+                "valid": p.get("valid", 1), "distance": p.get("distance") or 0,
+                "other": p.get("other") or "",
+            })
+    return puntos
+
+
+def obtener_historia_dia(s, tok: str, device_id: int, dia_str: str) -> list:
+    puntos = []
+    vistos = set()
+    for from_t, to_t in FRANJAS:
+        for intento in range(4):
+            try:
+                with _src_sem:
+                    r = s.post(f"{SRC_BASE}/get_history", json={
+                        "user_api_hash": tok, "device_id": device_id,
+                        "from_date": dia_str, "to_date": dia_str,
+                        "from_time": from_t, "to_time": to_t,
+                    }, timeout=60)
+                if r.status_code == 429:
+                    time.sleep(int(r.headers.get("Retry-After", 20)))
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                if data.get("status") == 1:
+                    for p in parsear_puntos(data):
+                        if p["time_utc"] not in vistos:
+                            vistos.add(p["time_utc"])
+                            puntos.append(p)
+                break
+            except Exception as exc:
+                if intento == 3:
+                    log(f"  ⚠ get_history dev={device_id} {dia_str} {from_t}: {exc}", error=True)
+                time.sleep(2 ** (intento + 1))
+        time.sleep(0.1)
+    return puntos
+
+
+# ─── WORKER ──────────────────────────────────────────────────────────────────
+
+def procesar_device(args) -> tuple:
+    nombre, imei, device_id, traccar_id, tok, dia_str = args
+    s = make_session()
+    puntos = obtener_historia_dia(s, tok, device_id, dia_str)
+    if not puntos:
+        return nombre, imei, 0
+    db_t = _conn(DB_TRACCAR)
+    db_w = _conn(DB_WEB)
+    try:
+        ensure_table(traccar_id, db_t)
+        n = insertar_puntos(traccar_id, puntos, db_t)
+        ultimo = max(puntos, key=lambda p: p["time_utc"])
+        actualizar_ultimo_pos(traccar_id, ultimo, db_w)
+        return nombre, imei, n
+    except Exception as exc:
+        log(f"  ❌ MySQL {nombre}: {exc}", error=True)
+        try:
+            db_t.rollback()
+        except Exception:
+            pass
+        return nombre, imei, 0
+    finally:
+        db_t.close()
+        db_w.close()
+
+
+# ─── SYNC DE UN DÍA ──────────────────────────────────────────────────────────
 
 def sync_dia(dia: date):
-    """Descarga y sube todos los dispositivos para la fecha indicada."""
-    log(f'\n{"="*65}')
-    log(f' SYNC DIARIO: {dia.strftime("%Y-%m-%d")}')
-    log(f'{"="*65}')
-
-    mapa = cargar_mapa()
-    if not mapa:
-        log('ERROR: migracion_mapa.json no encontrado. Ejecuta primero migrar_grupos_dispositivos.py', error=True)
-        return
-
-    session = make_session()
-
-    # Auth
-    log('[Auth] Autenticando...')
+    fecha_str = dia.strftime("%Y-%m-%d")
+    log(f"\n{'='*65}")
+    log(f" SYNC DIARIO: {fecha_str}")
+    log(f"{'='*65}")
+    s = make_session()
+    log("[Auth] Autenticando plataforma.sistemagps.online...")
     try:
-        token_src = login(session, SRC_BASE, SRC_EMAIL, SRC_PASS)
+        tok = api_login(s)
     except Exception as e:
-        log(f'[Auth] ERROR fuente: {e}', error=True)
+        log(f"[Auth] ERROR: {e}", error=True)
         return
-    log('  OK')
-
-    # Leer dispositivos fuente
-    log('[Fuente] Leyendo dispositivos...')
+    log("  OK")
+    log("[Devices] Obteniendo lista...")
     try:
-        r = session.post(SRC_BASE + '/get_devices', json={'user_api_hash': token_src}, timeout=60)
-        r.raise_for_status()
-        grupos_src = r.json()
+        devices = get_devices(s, tok)
     except Exception as e:
-        log(f'[Fuente] ERROR get_devices: {e}', error=True)
+        log(f"[Devices] ERROR: {e}", error=True)
         return
-
-    # Construir lista de trabajos
+    log(f"  {len(devices)} dispositivos")
+    log("[DB] Construyendo mapa IMEI → traccar_id...")
+    imei_map = build_imei_map()
+    log(f"  {len(imei_map)} traccar_devices en DB")
     trabajos = []
-    for g in grupos_src:
-        for d in g.get('items', []):
-            dd = d.get('device_data') or {}
-            imei = str(dd.get('imei') or '').strip()
-            nombre = (d.get('name') or '').strip()
-            dev_id = d.get('id')
-            if imei and nombre and dev_id and imei in mapa:
-                trabajos.append((nombre, imei, dev_id, token_src, dia))
-
-    log(f'  {len(trabajos)} dispositivos a sincronizar')
-
-    total_pts = 0
-    total_env = 0
-    total_err = 0
-    ok = 0
-
-    with ThreadPoolExecutor(max_workers=MAX_DEV_PARALELO) as ex:
-        futures = {ex.submit(procesar_dispositivo_dia, t): t for t in trabajos}
+    for d in devices:
+        tid = imei_map.get(d["imei"])
+        if tid and d["device_id"]:
+            trabajos.append((d["nombre"], d["imei"], d["device_id"], tid, tok, fecha_str))
+    log(f"  {len(trabajos)} dispositivos a sincronizar\n")
+    tot_pts = 0
+    tot_ok  = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(procesar_device, t): t for t in trabajos}
         for i, fut in enumerate(as_completed(futures), 1):
             try:
-                nombre, imei, pts, env, err = fut.result()
-                total_pts += pts
-                total_env += env
-                total_err += err
-                ok += 1
+                nombre, imei, pts = fut.result()
+                tot_pts += pts
                 if pts > 0:
-                    log(f'  [{i}/{len(trabajos)}] {nombre} | {pts} pts | {env} enviados')
-            except Exception as e:
-                log(f'  ❌ Error: {e}', error=True)
-
-    log(f'\nRESUMEN {dia}:')
-    log(f'  Devs procesados : {ok}')
-    log(f'  Puntos leídos   : {total_pts:,}')
-    log(f'  Enviados OK     : {total_env:,}')
-    log(f'  Errores         : {total_err:,}')
+                    tot_ok += 1
+                    log(f"  [{i}/{len(trabajos)}] {nombre}: {pts} pts")
+            except Exception as exc:
+                log(f"  ❌ worker error: {exc}", error=True)
+    log(f"\nRESUMEN {fecha_str}: {tot_ok} devs | {tot_pts:,} pts insertados")
 
 
 # ─── SCHEDULER ────────────────────────────────────────────────────────────────
 
-def segundos_hasta_proxima_ejecucion():
-    """Segundos hasta la próxima ejecución a las 01:00 AM GMT-5 (06:00 UTC)."""
+def segundos_hasta_proxima():
     ahora_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-    hoy_target = ahora_utc.replace(hour=HORA_UTC_EJECUCION, minute=MINUTO_EJECUCION,
-                                    second=0, microsecond=0)
-    if ahora_utc >= hoy_target:
-        # Ya pasó hoy → próxima ejecución mañana
-        hoy_target += timedelta(days=1)
-    delta = (hoy_target - ahora_utc).total_seconds()
-    return max(0, delta)
+    target = ahora_utc.replace(hour=HORA_UTC, minute=MINUTO_UTC, second=0, microsecond=0)
+    if ahora_utc >= target:
+        target += timedelta(days=1)
+    return max(0, (target - ahora_utc).total_seconds())
 
 
 def loop_scheduler():
-    """Loop infinito: espera hasta las 01:00 AM GMT-5 y ejecuta el sync."""
-    log('Scheduler iniciado — sincronización diaria a las 01:00 AM GMT-5 (06:00 UTC)')
+    log("Scheduler iniciado — sync a las 01:00 AM GMT-5 (06:00 UTC) cada dia")
     while True:
-        espera = segundos_hasta_proxima_ejecucion()
+        espera = segundos_hasta_proxima()
         proxima = datetime.now() + timedelta(seconds=espera)
-        log(f'Próxima ejecución en {espera/3600:.1f}h ({proxima.strftime("%Y-%m-%d %H:%M:%S local")})')
+        log(f"Proxima ejecucion: {proxima.strftime('%Y-%m-%d %H:%M:%S')} (en {espera/3600:.1f}h)")
         time.sleep(espera)
-
-        # El día a sincronizar es el día anterior (GMT-5)
         ayer = (datetime.now(timezone.utc) - timedelta(hours=5)).date() - timedelta(days=1)
         try:
             sync_dia(ayer)
-        except Exception as e:
-            log(f'ERROR en sync_dia: {e}', error=True)
-
-        # Esperar 60 seg para no disparar doble si el sleep se adelanta
+        except Exception as exc:
+            log(f"ERROR en sync_dia: {exc}", error=True)
         time.sleep(60)
-
-
-# ─── TASK SCHEDULER WINDOWS ───────────────────────────────────────────────────
-
-def programar_tarea_windows():
-    """Crea una tarea en el Programador de tareas de Windows."""
-    import subprocess, sys, os
-    script = os.path.abspath(__file__)
-    python = sys.executable
-    cmd = (
-        f'schtasks /Create /TN "GPSSync_Diario" /TR "{python} {script} --ahora" '
-        f'/SC DAILY /ST 01:00 /F /RU SYSTEM'
-    )
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    if result.returncode == 0:
-        log('✅ Tarea programada: GPSSync_Diario → 01:00 AM cada día')
-    else:
-        log(f'❌ Error creando tarea: {result.stderr}', error=True)
-        log('Intenta correr como Administrador o usa el loop_scheduler()', error=True)
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Sync diario GPS fuente→destino')
-    parser.add_argument('--ahora', action='store_true',
-                        help='Ejecutar sync del día anterior una sola vez ahora')
-    parser.add_argument('--fecha', type=str, metavar='YYYY-MM-DD',
-                        help='Sincronizar una fecha específica')
-    parser.add_argument('--programar-tarea', action='store_true',
-                        help='Crear tarea en el Programador de tareas de Windows')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Sync diario GPS -> MySQL GPSWox")
+    parser.add_argument("--ahora", action="store_true",
+                        help="Ejecutar sync del dia anterior inmediatamente")
+    parser.add_argument("--fecha", type=str, metavar="YYYY-MM-DD",
+                        help="Sincronizar una fecha especifica")
     args = parser.parse_args()
-
-    if args.programar_tarea:
-        programar_tarea_windows()
-
-    elif args.fecha:
+    if args.fecha:
         try:
-            dia = datetime.strptime(args.fecha, '%Y-%m-%d').date()
+            dia = datetime.strptime(args.fecha, "%Y-%m-%d").date()
         except ValueError:
-            print('Formato de fecha inválido. Usa YYYY-MM-DD')
+            print("Formato invalido. Usa YYYY-MM-DD")
             sys.exit(1)
         sync_dia(dia)
-
     elif args.ahora:
         ayer = (datetime.now(timezone.utc) - timedelta(hours=5)).date() - timedelta(days=1)
         sync_dia(ayer)
-
     else:
-        # Modo normal: loop infinito
         loop_scheduler()

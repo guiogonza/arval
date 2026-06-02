@@ -36,5 +36,10 @@ Thumbs.db
 # Logs
 *.log
 
+# Variables de entorno (credenciales — NUNCA en la imagen)
+.env
+.env.*
+!.env.example
+
 # Otros
 README.md
