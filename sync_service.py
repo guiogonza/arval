@@ -6,13 +6,14 @@ import threading
 import time
 import mygeotab
 import psycopg2.extras
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import os
 
 # Importar módulo de base de datos
 from database import (
-    get_connection, guardar_ubicacion, guardar_viaje,
+    get_connection, get_db_cursor, guardar_ubicacion, guardar_viaje,
     guardar_reporte_gps, guardar_exceso_velocidad,
     actualizar_resumen_diario, log_sync, init_database
 )
@@ -22,6 +23,22 @@ load_dotenv()
 # Configuración
 SYNC_INTERVAL = 300  # 5 minutos en segundos
 LIMITE_VELOCIDAD = 80  # km/h para excesos
+COLOMBIA_TZ = ZoneInfo('America/Bogota')
+
+
+def to_colombia_datetime(value):
+    if not value:
+        return value
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+        except ValueError:
+            return value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(COLOMBIA_TZ).replace(tzinfo=None)
 
 class SyncService:
     def __init__(self):
@@ -30,7 +47,7 @@ class SyncService:
         self.thread = None
         self.ultima_sync = None
         self.conectar()
-    
+
     def conectar(self):
         """Conecta con la API de Geotab"""
         try:
@@ -43,16 +60,17 @@ class SyncService:
             print("✅ Conectado a Geotab API")
             return True
         except Exception as e:
-            print(f"❌ Error conectando a Geotab: {e}")
+            print(f"âŒ Error conectando a Geotab: {e}")
             return False
-    
+
     def sync_dispositivos(self):
         """Sincroniza lista de dispositivos"""
+        conn = None
         try:
             devices = self.api.get('Device')
             conn = get_connection()
             cursor = conn.cursor()
-            
+
             for device in devices:
                 cursor.execute('''
                     INSERT INTO dispositivos (id, placa, serial_number, tipo_dispositivo, activo)
@@ -68,96 +86,93 @@ class SyncService:
                     device.get('serialNumber', ''),
                     device.get('deviceType', '')
                 ))
-            
+
             conn.commit()
             cursor.close()
-            conn.close()
-            
+
             log_sync('dispositivos', len(devices))
             print(f"✅ Sincronizados {len(devices)} dispositivos")
             return len(devices)
         except Exception as e:
             log_sync('dispositivos', 0, 'ERROR', str(e))
-            print(f"❌ Error sincronizando dispositivos: {e}")
+            print(f"âŒ Error sincronizando dispositivos: {e}")
             return 0
-    
+        finally:
+            if conn:
+                conn.close()
+
     def sync_ubicaciones(self):
         """Sincroniza ubicaciones actuales de todos los vehículos"""
         try:
             device_statuses = self.api.get('DeviceStatusInfo')
             count = 0
-            
+
             for status in device_statuses:
                 try:
                     device = status.get('device', {})
                     device_id = device.get('id') if isinstance(device, dict) else device
                     placa = device.get('name', str(device_id)) if isinstance(device, dict) else str(device_id)
-                    
+
                     lat = status.get('latitude', 0)
                     lng = status.get('longitude', 0)
                     velocidad = status.get('speed', 0)
                     direccion = status.get('bearing', 0)
-                    fecha_gps = status.get('dateTime')
+                    fecha_gps = to_colombia_datetime(status.get('dateTime'))
                     comunicando = 1 if status.get('isDeviceCommunicating', False) else 0
-                    
+
                     guardar_ubicacion(
                         device_id, placa, lat, lng, velocidad, direccion, fecha_gps, comunicando
                     )
                     count += 1
                 except Exception as e:
                     continue
-            
+
             log_sync('ubicaciones', count)
             print(f"✅ Sincronizadas {count} ubicaciones")
             return count
         except Exception as e:
             log_sync('ubicaciones', 0, 'ERROR', str(e))
-            print(f"❌ Error sincronizando ubicaciones: {e}")
+            print(f"âŒ Error sincronizando ubicaciones: {e}")
             return 0
-    
+
     def sync_viajes_dia(self, fecha=None):
         """Sincroniza viajes de un día para todos los vehículos"""
         if fecha is None:
             fecha = datetime.now().date()
-        
+
         try:
-            conn = get_connection()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cursor.execute('SELECT id, placa FROM dispositivos')
-            dispositivos = cursor.fetchall()
-            cursor.close()
-            conn.close()
-            
-            if not dispositivos:
-                print("⚠️ No hay dispositivos en BD, sincronizando primero...")
-                self.sync_dispositivos()
-                conn = get_connection()
-                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            # Usar context manager para obtener dispositivos
+            with get_db_cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
                 cursor.execute('SELECT id, placa FROM dispositivos')
                 dispositivos = cursor.fetchall()
-                cursor.close()
-                conn.close()
-            
+
+            if not dispositivos:
+                print("âš ï¸ No hay dispositivos en BD, sincronizando primero...")
+                self.sync_dispositivos()
+                with get_db_cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                    cursor.execute('SELECT id, placa FROM dispositivos')
+                    dispositivos = cursor.fetchall()
+
             from_date = datetime.combine(fecha, datetime.min.time())
             to_date = datetime.combine(fecha, datetime.max.time())
-            
+
             total_viajes = 0
             total_excesos = 0
-            
+
             for disp in dispositivos:
                 try:
-                    trips = self.api.get('Trip', 
+                    trips = self.api.get('Trip',
                                         deviceSearch={'id': disp['id']},
                                         fromDate=from_date,
                                         toDate=to_date)
-                    
+
                     for i, trip in enumerate(trips, 1):
                         # Obtener datos del viaje (usando .get() para diccionarios)
                         start_time = trip.get('start')
                         stop_time = trip.get('stop')
                         # Geotab devuelve distance en km (NO dividir por 1000)
                         distance = trip.get('distance') or 0
-                        
+
                         duracion = 0
                         driving_dur = trip.get('drivingDuration')
                         if driving_dur:
@@ -166,7 +181,7 @@ class SyncService:
                                     duracion = driving_dur.total_seconds() / 60
                             except:
                                 duracion = 0
-                        
+
                         # Obtener velocidad máxima del viaje (ya viene en el Trip)
                         vel_max = trip.get('maximumSpeed', 0) or 0
 
@@ -175,7 +190,7 @@ class SyncService:
                         lng_ini = trip.get('startLongitude') or 0
                         lat_fin = trip.get('stopLatitude') or 0
                         lng_fin = trip.get('stopLongitude') or 0
-                        
+
                         # Guardar viaje
                         guardar_viaje(
                             disp['id'], disp['placa'], str(fecha), i,
@@ -196,7 +211,7 @@ class SyncService:
                                 disp['id'], disp['placa'], str(fecha),
                                 lat_fin, lng_fin, 0, stop_time, False
                             )
-                        
+
                         # Detectar exceso de velocidad basado en velocidad máxima del viaje
                         if vel_max > LIMITE_VELOCIDAD:
                             guardar_exceso_velocidad(
@@ -204,71 +219,71 @@ class SyncService:
                                 vel_max, 0, 0, start_time, LIMITE_VELOCIDAD
                             )
                             total_excesos += 1
-                            
+
                 except Exception as e:
                     continue
-                
+
                 # Actualizar resumen diario del vehículo
                 actualizar_resumen_diario(disp['placa'], str(fecha))
-            
+
             log_sync('viajes', total_viajes)
             print(f"✅ Sincronizados {total_viajes} viajes, {total_excesos} excesos de velocidad")
             return total_viajes
-            
+
         except Exception as e:
             log_sync('viajes', 0, 'ERROR', str(e))
-            print(f"❌ Error sincronizando viajes: {e}")
+            print(f"âŒ Error sincronizando viajes: {e}")
             return 0
-    
+
     def ejecutar_sync_completa(self):
         """Ejecuta sincronización completa"""
-        print(f"\n🔄 Iniciando sincronización - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        
+        print(f"\nðŸ”„ Iniciando sincronización - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
         # Reconectar si es necesario
         if self.api is None:
             self.conectar()
-        
+
         # Sincronizar dispositivos (solo 1 vez al día sería suficiente)
         self.sync_dispositivos()
-        
+
         # Sincronizar ubicaciones actuales
         self.sync_ubicaciones()
-        
+
         # Sincronizar viajes del día actual
         self.sync_viajes_dia()
-        
+
         self.ultima_sync = datetime.now()
         print(f"✅ Sincronización completa - {self.ultima_sync.strftime('%Y-%m-%d %H:%M:%S')}\n")
-    
+
     def loop_sync(self):
         """Loop principal de sincronización"""
         while self.running:
             try:
                 self.ejecutar_sync_completa()
             except Exception as e:
-                print(f"❌ Error en loop de sincronización: {e}")
-            
+                print(f"âŒ Error en loop de sincronización: {e}")
+
             # Esperar hasta próxima sincronización
             time.sleep(SYNC_INTERVAL)
-    
+
     def iniciar(self):
         """Inicia el servicio de sincronización en segundo plano"""
         if self.running:
-            print("⚠️ El servicio ya está corriendo")
+            print("âš ï¸ El servicio ya está corriendo")
             return
-        
+
         self.running = True
         self.thread = threading.Thread(target=self.loop_sync, daemon=True)
         self.thread.start()
         print(f"🚀 Servicio de sincronización iniciado (cada {SYNC_INTERVAL//60} minutos)")
-    
+
     def detener(self):
         """Detiene el servicio de sincronización"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=5)
-        print("⏹️ Servicio de sincronización detenido")
-    
+        print("â¹ï¸ Servicio de sincronización detenido")
+
     def get_status(self):
         """Obtiene estado del servicio"""
         return {

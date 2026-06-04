@@ -69,7 +69,7 @@ def make_session() -> requests.Session:
 
 
 def log(msg: str):
-    ts   = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    ts   = datetime.now(ZoneInfo(SRC_TIMEZONE)).strftime('%Y-%m-%d %H:%M:%S')
     line = f'[{ts}] {msg}'
     print(line, flush=True)
     try:
@@ -97,7 +97,7 @@ def guardar_estado(datos: dict):
         pass
 
 
-# ─── CATÁLOGO DE DISPOSITIVOS ─────────────────────────────────────────────────
+# ─── CATÃLOGO DE DISPOSITIVOS ─────────────────────────────────────────────────
 
 def get_all_devices_src(session: requests.Session, token: str) -> dict:
     """
@@ -212,11 +212,11 @@ def sync_catalogo(session_src: requests.Session, token_src: str,
     Sincroniza catálogo fuente → destino.
     Retorna el mapa completo de dispositivos de la fuente.
     """
-    log('\n[CATÁLOGO] Leyendo fuente (API)...')
+    log('\n[CATÃLOGO] Leyendo fuente (API)...')
     devs_src = get_all_devices_src(session_src, token_src)
     log(f'  Fuente : {len(devs_src)} dispositivos')
 
-    log('[CATÁLOGO] Leyendo destino (MySQL directo)...')
+    log('[CATÃLOGO] Leyendo destino (MySQL directo)...')
     devs_dst = get_all_devices_dst()
     log(f'  Destino: {len(devs_dst)} dispositivos')
 
@@ -265,10 +265,10 @@ def sync_catalogo(session_src: requests.Session, token_src: str,
             except Exception as exc:
                 log(f'  [ERROR-CREAR] "{src["name"]}" IMEI={imei}: {exc}')
 
-    log(f'[CATÁLOGO] OK: {ya_existen} existentes | {nuevos} creados | {len(mismatches)} mismatches')
+    log(f'[CATÃLOGO] OK: {ya_existen} existentes | {nuevos} creados | {len(mismatches)} mismatches')
 
     if mismatches:
-        log('[CATÁLOGO] Mismatches IMEI/Placa:')
+        log('[CATÃLOGO] Mismatches IMEI/Placa:')
         for m in mismatches:
             log(f'           IMEI={m["imei"]} | Fuente="{m["fuente"]}" | Destino="{m["destino"]}"')
 
@@ -334,7 +334,7 @@ def actualizar_traccar_device_latest(traccar_id: int, pos: dict):
                 (pos.get('id'), pos.get('latitude'), pos.get('longitude'),
                  pos.get('altitude') or 0, pos.get('course') or 0, pos.get('speed') or 0,
                  pos.get('time'), pos.get('device_time') or pos.get('time'),
-                 pos.get('server_time') or datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                 pos.get('server_time') or datetime.now(ZoneInfo(SRC_TIMEZONE)).strftime('%Y-%m-%d %H:%M:%S'),
                  pos.get('protocol') or 'plataforma', latest_positions, traccar_id),
             )
         conn.commit()
@@ -353,11 +353,12 @@ def insertar_posiciones_mysql_dev(traccar_id: int, puntos: list) -> tuple:
     if not puntos:
         return 0, 0
     tabla = f'positions_{traccar_id}'
-    server_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    tz_src = ZoneInfo(SRC_TIMEZONE)
+    server_time = datetime.now(tz_src).strftime('%Y-%m-%d %H:%M:%S')
     vals = []
     for p in puntos:
         try:
-            dt = datetime.fromtimestamp(p['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
+            dt = datetime.fromtimestamp(p['timestamp'], tz_src).strftime('%Y-%m-%d %H:%M:%S')
         except Exception:
             dt = server_time
         vals.append((traccar_id, p.get('altitude', 0), p.get('course', 0),
@@ -421,7 +422,11 @@ def _parsear_puntos(data: dict) -> list:
             if not lat or not lng:
                 continue
             try:
-                ts = int(datetime.strptime(raw_t, '%Y-%m-%d %H:%M:%S').timestamp())
+                ts = int(
+                    datetime.strptime(raw_t, '%Y-%m-%d %H:%M:%S')
+                    .replace(tzinfo=ZoneInfo(SRC_TIMEZONE))
+                    .timestamp()
+                )
             except Exception:
                 ts = int(time.time())
             if ts not in vistos:
@@ -450,7 +455,7 @@ def obtener_historia_intervalo(session: requests.Session, token: str,
 
             if r.status_code == 429:
                 wait = int(r.headers.get('Retry-After', 10))
-                log(f'    ⏳ 429 rate-limit device={device_id} — esperando {wait}s')
+                log(f'    â³ 429 rate-limit device={device_id} — esperando {wait}s')
                 time.sleep(wait)
                 continue
 
@@ -523,7 +528,7 @@ def sync_posiciones_recientes(session_src: requests.Session, token_src: str,
 # ─── MAIN ────────────────────────────────────────────────────────────────────
 
 def main():
-    inicio = datetime.now()
+    inicio = datetime.now(ZoneInfo(SRC_TIMEZONE))
     log('=' * 65)
     log(f' SYNC HORARIO: plataforma.sistemagps.online → gps.rastrear.com.co')
     log(f' {inicio.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -549,7 +554,7 @@ def main():
             session_src, token_src, devs_src
         )
 
-        fin      = datetime.now()
+        fin      = datetime.now(ZoneInfo(SRC_TIMEZONE))
         duracion = round((fin - inicio).total_seconds(), 1)
 
         guardar_estado({

@@ -4,25 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPS Geotab - Arval Colombia</title>
-    
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet MarkerCluster CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #f0f2f5;
         }
-        
+
         .header {
             background: linear-gradient(135deg, #1a73e8, #0d47a1);
             color: white;
@@ -32,19 +32,19 @@
             align-items: center;
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
-        
+
         .header h1 {
             font-size: 1.5rem;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-        
+
         .header-nav {
             display: flex;
             gap: 10px;
         }
-        
+
         .header-nav a {
             color: white;
             text-decoration: none;
@@ -54,17 +54,17 @@
             font-size: 0.9rem;
             transition: background 0.3s;
         }
-        
+
         .header-nav a:hover {
             background: rgba(255,255,255,0.3);
         }
-        
+
         .sidebar-tabs {
             display: flex;
             gap: 5px;
             margin-bottom: 15px;
         }
-        
+
         .sidebar-tab {
             flex: 1;
             padding: 12px 10px;
@@ -77,21 +77,21 @@
             font-weight: 600;
             transition: all 0.3s;
         }
-        
+
         .sidebar-tab:hover {
             background: #bbdefb;
         }
-        
+
         .sidebar-tab.active {
             background: #1a73e8;
             color: white;
         }
-        
+
         .container {
             display: flex;
             height: calc(100vh - 60px);
         }
-        
+
         .sidebar {
             width: 350px;
             background: white;
@@ -99,19 +99,19 @@
             overflow-y: auto;
             box-shadow: 2px 0 10px rgba(0,0,0,0.1);
         }
-        
+
         .map-container {
             flex: 1;
             position: relative;
             display: flex;
             flex-direction: column;
         }
-        
+
         #map {
             width: 100%;
             flex: 1;
         }
-        
+
         #speed-chart-container {
             display: none;
             height: 180px;
@@ -120,25 +120,25 @@
             padding: 8px 12px 4px 12px;
             position: relative;
         }
-        
+
         #speed-chart-container .chart-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 4px;
         }
-        
+
         #speed-chart-container .chart-header h4 {
             margin: 0;
             font-size: 0.85rem;
             color: #333;
         }
-        
+
         #speed-chart-container .chart-header .chart-info {
             font-size: 0.75rem;
             color: #888;
         }
-        
+
         #speed-chart-container .btn-close-chart {
             background: none;
             border: none;
@@ -147,22 +147,22 @@
             color: #999;
             padding: 0 4px;
         }
-        
+
         #speed-chart-container .btn-close-chart:hover {
             color: #333;
         }
-        
+
         .form-group {
             margin-bottom: 15px;
         }
-        
+
         .form-group label {
             display: block;
             margin-bottom: 5px;
             font-weight: 600;
             color: #333;
         }
-        
+
         .form-group select, .form-group input {
             width: 100%;
             padding: 10px;
@@ -170,7 +170,7 @@
             border-radius: 5px;
             font-size: 1rem;
         }
-        
+
         .btn {
             width: 100%;
             padding: 12px;
@@ -181,25 +181,25 @@
             transition: all 0.3s;
             margin-top: 10px;
         }
-        
+
         .btn-primary {
             background: #1a73e8;
             color: white;
         }
-        
+
         .btn-primary:hover {
             background: #0d47a1;
         }
-        
+
         .btn-success {
             background: #34a853;
             color: white;
         }
-        
+
         .btn-success:hover {
             background: #2d8a46;
         }
-        
+
         .btn-order {
             flex: 1;
             padding: 8px 12px;
@@ -211,53 +211,60 @@
             font-size: 0.8rem;
             transition: all 0.3s;
         }
-        
+
         .btn-order:hover {
             background: #e3f2fd;
         }
-        
+
         .btn-order.active {
             background: #1a73e8;
             color: white;
         }
-        
+
         .stats-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-top: 20px;
         }
-        
+
         .stat-card {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 8px;
             text-align: center;
         }
-        
+
         .stat-card .number {
             font-size: 1.8rem;
             font-weight: bold;
             color: #1a73e8;
         }
-        
+
         .stat-card .label {
             font-size: 0.8rem;
             color: #666;
         }
-        
+
         .vehicle-list {
             margin-top: 10px;
-            max-height: 350px;
+            max-height: calc(100vh - 405px);
+            min-height: 460px;
             overflow-y: auto;
         }
-        
+
+        .filter-count {
+            color: #5f6368;
+            font-size: 0.78rem;
+            margin: -2px 0 8px 2px;
+        }
+
         .search-box {
             display: flex;
             gap: 8px;
             margin-bottom: 10px;
         }
-        
+
         .search-box input {
             flex: 1;
             padding: 10px 12px;
@@ -266,13 +273,13 @@
             font-size: 0.95rem;
             transition: all 0.3s;
         }
-        
+
         .search-box input:focus {
             border-color: #1a73e8;
             outline: none;
             box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.15);
         }
-        
+
         .search-box button {
             padding: 10px 15px;
             background: #1a73e8;
@@ -283,54 +290,83 @@
             font-size: 1rem;
             transition: all 0.3s;
         }
-        
+
         .search-box button:hover {
             background: #0d47a1;
         }
-        
+
         .vehicle-item {
-            padding: 12px;
+            padding: 9px 11px;
             border: 1px solid #eee;
             border-radius: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             cursor: pointer;
             transition: all 0.3s;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            min-height: 64px;
         }
-        
+
         .vehicle-item:hover {
             background: #e3f2fd;
             border-color: #1a73e8;
         }
-        
+
         .vehicle-item .placa {
             font-weight: bold;
-            font-size: 1.1rem;
+            font-size: 1.02rem;
         }
-        
+
         .vehicle-item .info {
-            font-size: 0.8rem;
+            font-size: 0.76rem;
             color: #666;
+            line-height: 1.25;
         }
-        
+
         .status-dot {
             width: 12px;
             height: 12px;
             border-radius: 50%;
             display: inline-block;
         }
-        
+
         .status-dot.online {
             background: #34a853;
             box-shadow: 0 0 5px #34a853;
         }
-        
+
         .status-dot.offline {
             background: #ea4335;
         }
-        
+
+        .vehicle-status {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .engine-state {
+            align-items: center;
+            border-radius: 999px;
+            display: inline-flex;
+            font-size: 1.05rem;
+            height: 28px;
+            justify-content: center;
+            width: 28px;
+        }
+
+        .engine-state.on {
+            background: rgba(52, 168, 83, 0.14);
+            color: #188038;
+        }
+
+        .engine-state.off {
+            background: rgba(95, 99, 104, 0.12);
+            color: #80868b;
+            filter: grayscale(1);
+        }
+
         .trip-card {
             background: #f8f9fa;
             padding: 15px;
@@ -378,25 +414,25 @@
             transform: scale(1.02);
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
         }
-        
+
         .trip-card h4 {
             color: #1a73e8;
             margin-bottom: 10px;
         }
-        
+
         .trip-detail {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
             font-size: 0.9rem;
         }
-        
+
         .loader {
             text-align: center;
             padding: 40px;
             color: #666;
         }
-        
+
         .loader .spinner {
             border: 4px solid #f3f3f3;
             border-top: 4px solid #1a73e8;
@@ -406,12 +442,12 @@
             animation: spin 1s linear infinite;
             margin: 0 auto 15px;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
+
         .section-title {
             font-size: 1rem;
             color: #333;
@@ -419,15 +455,15 @@
             padding-bottom: 5px;
             border-bottom: 2px solid #1a73e8;
         }
-        
+
         #panel-ubicaciones, #panel-viajes {
             display: none;
         }
-        
+
         #panel-ubicaciones.active, #panel-viajes.active {
             display: block;
         }
-        
+
         .legend {
             position: absolute;
             bottom: 30px;
@@ -439,14 +475,14 @@
             z-index: 1000;
             font-size: 0.85rem;
         }
-        
+
         .legend-item {
             display: flex;
             align-items: center;
             gap: 8px;
             margin: 5px 0;
         }
-        
+
         /* Estilos para tooltip de placa */
         .placa-tooltip {
             background: rgba(0, 0, 0, 0.8) !important;
@@ -458,7 +494,7 @@
             padding: 4px 8px !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
         }
-        
+
         .placa-tooltip::before {
             border-top-color: rgba(0, 0, 0, 0.8) !important;
         }
@@ -468,25 +504,25 @@
     <div class="header">
         <h1>🚗 GPS Geotab - Arval Colombia</h1>
         <div class="header-nav">
-            <a href="/">🗺️ Mapa</a>
+            <a href="/">ðŸ—ºï¸ Mapa</a>
             <a href="/estadisticas">📊 Estadísticas</a>
         </div>
     </div>
-    
+
     <div class="container">
         <div class="sidebar">
             <!-- Tabs en el sidebar -->
             <div class="sidebar-tabs">
-                <button class="sidebar-tab active" onclick="showPanel('ubicaciones')">📍 Ubicaciones</button>
-                <button class="sidebar-tab" onclick="showPanel('viajes')">🛣️ Viajes</button>
+                <button class="sidebar-tab active" onclick="showPanel('ubicaciones')">ðŸ“ Ubicaciones</button>
+                <button class="sidebar-tab" onclick="showPanel('viajes')">ðŸ›£ï¸ Viajes</button>
             </div>
-            
+
             <!-- Panel Ubicaciones -->
             <div id="panel-ubicaciones" class="active">
                 <button class="btn btn-success" onclick="cargarUbicaciones()">
-                    🔄 Actualizar Ubicaciones
+                    ðŸ”„ Actualizar Ubicaciones
                 </button>
-                
+
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="number" id="total-vehiculos">-</div>
@@ -497,16 +533,17 @@
                         <div class="label">Comunicando</div>
                     </div>
                 </div>
-                
+
                 <h3 class="section-title">Lista de Vehículos</h3>
                 <div class="search-box">
                     <input type="text" id="buscar-vehiculo" placeholder="Buscar placa..." onkeyup="filtrarVehiculos()">
-                    <button onclick="filtrarVehiculos()">🔍</button>
+                    <button onclick="filtrarVehiculos()">ðŸ”</button>
                 </div>
                 <div style="margin-bottom: 10px; display: flex; gap: 5px;">
                     <button class="btn-order active" id="btn-orden-placa" onclick="ordenarVehiculos('placa')">📋 Por Placa</button>
-                    <button class="btn-order" id="btn-orden-fecha" onclick="ordenarVehiculos('fecha')">🕐 Por Reporte</button>
+                    <button class="btn-order" id="btn-orden-fecha" onclick="ordenarVehiculos('fecha')">ðŸ• Por Reporte</button>
                 </div>
+                <div class="filter-count" id="contador-filtro">Mostrando 0 de 0 vehículos</div>
                 <div class="vehicle-list" id="lista-vehiculos">
                     <div class="loader">
                         <div class="spinner"></div>
@@ -514,7 +551,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <!-- Panel Viajes -->
             <div id="panel-viajes">
                 <div class="form-group">
@@ -523,20 +560,20 @@
                         <option value="">Cargando placas...</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group">
                     <label>Fecha</label>
                     <input type="date" id="select-fecha">
                 </div>
-                
+
                 <button class="btn btn-primary" onclick="cargarViajes()">
-                    🔍 Buscar Viajes
+                    ðŸ” Buscar Viajes
                 </button>
-                
+
                 <button class="btn btn-success" onclick="cargarRecorrido()">
-                    🗺️ Ver Recorrido en Mapa
+                    ðŸ—ºï¸ Ver Recorrido en Mapa
                 </button>
-                
+
                 <!-- Resumen del día completo -->
                 <div id="resumen-dia" style="display: none; margin-top: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; padding: 15px; color: white;">
                     <h4 style="margin: 0 0 10px 0; font-size: 1rem;">📅 Resumen del Día</h4>
@@ -550,11 +587,11 @@
                             <div id="dia-fin" style="font-weight: bold;">--:--</div>
                         </div>
                         <div>
-                            <div style="opacity: 0.8;">⏱️ Tiempo activo</div>
+                            <div style="opacity: 0.8;">â±ï¸ Tiempo activo</div>
                             <div id="dia-tiempo" style="font-weight: bold;">--</div>
                         </div>
                         <div>
-                            <div style="opacity: 0.8;">📏 Distancia total</div>
+                            <div style="opacity: 0.8;">ðŸ“ Distancia total</div>
                             <div id="dia-distancia" style="font-weight: bold;">-- km</div>
                         </div>
                     </div>
@@ -564,12 +601,12 @@
                             <span id="dia-viajes" style="font-weight: bold;">0</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-top: 5px;">
-                            <span style="opacity: 0.8;">📍 Total reportes:</span>
+                            <span style="opacity: 0.8;">ðŸ“ Total reportes:</span>
                             <span id="dia-reportes" style="font-weight: bold;">0</span>
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="stats-grid" id="stats-viajes" style="display: none;">
                     <div class="stat-card">
                         <div class="number" id="total-viajes">0</div>
@@ -580,7 +617,7 @@
                         <div class="label">Km Total</div>
                     </div>
                 </div>
-                
+
                 <h3 class="section-title">Detalle de Viajes</h3>
                 <div id="lista-viajes">
                     <p style="color: #666; text-align: center; padding: 20px;">
@@ -589,7 +626,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="map-container">
             <div id="map"></div>
             <div id="speed-chart-container">
@@ -597,7 +634,7 @@
                     <h4>📈 Velocidad</h4>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span class="chart-info" id="chart-hover-info"></span>
-                        <button class="btn-close-chart" onclick="cerrarGrafica()" title="Cerrar gráfica">✕</button>
+                        <button class="btn-close-chart" onclick="cerrarGrafica()" title="Cerrar gráfica">âœ•</button>
                     </div>
                 </div>
                 <canvas id="speedChart"></canvas>
@@ -613,40 +650,40 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Leaflet MarkerCluster JS -->
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    
+
     <script>
         // Inicializar mapa centrado en Colombia
         const map = L.map('map').setView([4.6097, -74.0817], 6);
-        
+
         // Capas de mapa
         const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         });
-        
+
         const satelliteLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
             attribution: '© Google',
             maxZoom: 20
         });
-        
+
         // Añadir capa por defecto
         osmLayer.addTo(map);
-        
+
         // Control de capas
         const baseLayers = {
-            "🗺️ Mapa": osmLayer,
-            "🛰️ Satélite": satelliteLayer
+            "ðŸ—ºï¸ Mapa": osmLayer,
+            "ðŸ›°ï¸ Satélite": satelliteLayer
         };
-        
+
         L.control.layers(baseLayers).addTo(map);
-        
+
         let markers = [];
         let markerClusterGroup = L.markerClusterGroup({
             maxClusterRadius: 80,
@@ -658,30 +695,61 @@
         map.addLayer(markerClusterGroup);
         let polyline = null;
         let vehiculosData = [];
-        
-        // Íconos personalizados
+        const COLOMBIA_TIMEZONE = 'America/Bogota';
+
+        function parseFecha(fecha) {
+            return fecha ? new Date(fecha) : null;
+        }
+
+        function formatFechaColombia(fecha) {
+            const dt = parseFecha(fecha);
+            return dt && !Number.isNaN(dt.getTime())
+                ? dt.toLocaleString('es-CO', { timeZone: COLOMBIA_TIMEZONE, hour12: false })
+                : '';
+        }
+
+        function formatFechaListaColombia(fecha) {
+            const dt = parseFecha(fecha);
+            if (!dt || Number.isNaN(dt.getTime())) return '';
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: COLOMBIA_TIMEZONE,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            }).formatToParts(dt).reduce((acc, part) => {
+                acc[part.type] = part.value;
+                return acc;
+            }, {});
+            return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+        }
+
+        // Ãconos personalizados
         const iconOnline = L.divIcon({
             className: 'custom-marker',
             html: '<div style="background: #34a853; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">🚗</div>',
             iconSize: [30, 30],
             iconAnchor: [15, 15]
         });
-        
+
         const iconOffline = L.divIcon({
             className: 'custom-marker',
             html: '<div style="background: #ea4335; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 14px;">🚗</div>',
             iconSize: [30, 30],
             iconAnchor: [15, 15]
         });
-        
+
         // Mostrar panel
         function showPanel(panel) {
             document.querySelectorAll('.sidebar-tab').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('#panel-ubicaciones, #panel-viajes').forEach(p => p.classList.remove('active'));
-            
+
             document.getElementById('panel-' + panel).classList.add('active');
             event.target.classList.add('active');
-            
+
             if (panel === 'ubicaciones') {
                 cargarUbicaciones();
             } else if (panel === 'viajes') {
@@ -690,74 +758,78 @@
                 map.setView([4.6097, -74.0817], 6);
             }
         }
-        
+
         // Variable para el orden actual
         let ordenActual = 'placa';
-        
+
         // Cargar ubicaciones
         async function cargarUbicaciones() {
             limpiarMapa();
-            
+
             document.getElementById('lista-vehiculos').innerHTML = `
                 <div class="loader">
                     <div class="spinner"></div>
                     Cargando ubicaciones...
                 </div>
             `;
-            
+
             try {
                 const response = await fetch('/api/ubicaciones');
                 const ubicaciones = await response.json();
-                
+
                 vehiculosData = ubicaciones;
-                
+
                 // Aplicar ordenamiento actual
                 ordenarYMostrar(ordenActual);
-                
+
             } catch (error) {
                 document.getElementById('lista-vehiculos').innerHTML = `
                     <p style="color: red;">Error al cargar ubicaciones: ${error.message}</p>
                 `;
             }
         }
-        
+
         // Ordenar y mostrar vehículos
         function ordenarYMostrar(criterio) {
             if (!vehiculosData || vehiculosData.length === 0) return;
-            
+
             let datosOrdenados = [...vehiculosData];
-            
+
             if (criterio === 'placa') {
                 datosOrdenados.sort((a, b) => (a.placa || '').localeCompare(b.placa || ''));
             } else if (criterio === 'fecha') {
                 datosOrdenados.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
             }
-            
+
             let html = '';
             let activos = 0;
             const bounds = [];
-            
+
             // Limpiar marcadores previos
             markerClusterGroup.clearLayers();
             markers = [];
-            
+
             datosOrdenados.forEach(v => {
                 if (v.encendido) activos++;
-                
+                const motorEncendido = Boolean(v.motor_encendido);
+                const motorTexto = motorEncendido ? 'Motor encendido' : 'Motor apagado';
+                const motorClase = motorEncendido ? 'on' : 'off';
+
                 // Crear marcador
                 const marker = L.marker([v.lat, v.lng], {
                     icon: v.encendido ? iconOnline : iconOffline
                 });
-                
-                const fecha = new Date(v.fecha).toLocaleString('es-CO');
+
+                const fecha = formatFechaColombia(v.fecha);
                 marker.bindPopup(`
                     <strong style="font-size: 1.2rem;">${v.placa}</strong><br>
                     <b>IMEI:</b> ${v.serial || 'N/A'}<br>
                     <b>Velocidad:</b> ${v.velocidad} km/h<br>
+                    <b>Motor:</b> ${motorTexto}<br>
                     <b>Última actualización:</b><br>${fecha}<br>
                     <b>Estado:</b> ${v.encendido ? '🟢 Comunicando' : '🔴 Sin comunicación'}
                 `);
-                
+
                 // Tooltip con placa: siempre visible (clustering maneja solapamiento)
                 marker.bindTooltip(v.placa, {
                     permanent: true,
@@ -765,64 +837,71 @@
                     className: 'placa-tooltip',
                     offset: [0, -10]
                 });
-                
+
                 markers.push(marker);
                 markerClusterGroup.addLayer(marker);
                 bounds.push([v.lat, v.lng]);
-                
+
                 // Lista
-                const fechaObj = new Date(v.fecha);
-                const año = fechaObj.getFullYear();
-                const mes = String(fechaObj.getMonth() + 1).padStart(2, '0');
-                const dia = String(fechaObj.getDate()).padStart(2, '0');
-                const hora = String(fechaObj.getHours()).padStart(2, '0');
-                const min = String(fechaObj.getMinutes()).padStart(2, '0');
-                const seg = String(fechaObj.getSeconds()).padStart(2, '0');
-                const fechaFormato = `${año}-${mes}-${dia} ${hora}:${min}:${seg}`;
+                const fechaFormato = formatFechaListaColombia(v.fecha);
                 html += `
                     <div class="vehicle-item" onclick="centrarVehiculo(${v.lat}, ${v.lng}, '${v.placa}')" data-placa="${v.placa}" data-serial="${v.serial || ''}">
                         <div>
                             <div class="placa">${v.placa}</div>
                             <div class="info">${v.velocidad} km/h - ${fechaFormato}</div>
+                            <div class="info">${motorTexto}</div>
                             <div class="info" style="font-size: 0.7rem; color: #888;">IMEI: ${v.serial || 'N/A'}</div>
                         </div>
-                        <span class="status-dot ${v.encendido ? 'online' : 'offline'}"></span>
+                        <div class="vehicle-status">
+                            <span class="engine-state ${motorClase}" title="${motorTexto}" aria-label="${motorTexto}">🔑</span>
+                            <span class="status-dot ${v.encendido ? 'online' : 'offline'}" title="${v.encendido ? 'Comunicando' : 'Sin comunicación'}"></span>
+                        </div>
                     </div>
                 `;
             });
-            
+
             document.getElementById('lista-vehiculos').innerHTML = html || '<p>No hay vehículos</p>';
             document.getElementById('total-vehiculos').textContent = vehiculosData.length;
             document.getElementById('total-activos').textContent = activos;
-            
+            filtrarVehiculos();
+
             if (bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
         }
-        
+
         // Ordenar vehículos
         function ordenarVehiculos(criterio) {
             ordenActual = criterio;
-            
+
             // Actualizar botones activos
             document.getElementById('btn-orden-placa').classList.toggle('active', criterio === 'placa');
             document.getElementById('btn-orden-fecha').classList.toggle('active', criterio === 'fecha');
-            
+
             ordenarYMostrar(criterio);
         }
-        
+
         // Filtrar vehículos
         function filtrarVehiculos() {
             const busqueda = document.getElementById('buscar-vehiculo').value.toLowerCase();
             const items = document.querySelectorAll('.vehicle-item');
-            
+            let visibles = 0;
+
             items.forEach(item => {
                 const placa = item.querySelector('.placa').textContent.toLowerCase();
                 const serial = (item.dataset.serial || '').toLowerCase();
-                item.style.display = (placa.includes(busqueda) || serial.includes(busqueda)) ? 'flex' : 'none';
+                const coincide = placa.includes(busqueda) || serial.includes(busqueda);
+                item.style.display = coincide ? 'flex' : 'none';
+                if (coincide) visibles++;
             });
+
+            const total = items.length || (vehiculosData ? vehiculosData.length : 0);
+            const contador = document.getElementById('contador-filtro');
+            if (contador) {
+                contador.textContent = `Mostrando ${visibles} de ${total} vehículos`;
+            }
         }
-        
+
         // Centrar en vehículo
         function centrarVehiculo(lat, lng, placa) {
             map.setView([lat, lng], 16);
@@ -833,16 +912,16 @@
             });
         }
 
-        
+
         // Cargar dispositivos para select
         async function cargarDispositivos() {
             try {
                 const response = await fetch('/api/dispositivos');
                 const dispositivos = await response.json();
-                
+
                 const select = document.getElementById('select-placa');
                 select.innerHTML = '<option value="">-- Seleccionar placa --</option>';
-                
+
                 dispositivos.forEach(d => {
                     select.innerHTML += `<option value="${d.placa}">${d.placa}</option>`;
                 });
@@ -850,52 +929,52 @@
                 console.error('Error cargando dispositivos:', error);
             }
         }
-        
+
         // Cargar viajes
         async function cargarViajes() {
             const placa = document.getElementById('select-placa').value;
             const fecha = document.getElementById('select-fecha').value;
-            
+
             if (!placa || !fecha) {
                 alert('Selecciona una placa y una fecha');
                 return;
             }
-            
+
             document.getElementById('lista-viajes').innerHTML = `
                 <div class="loader">
                     <div class="spinner"></div>
                     Cargando viajes...
                 </div>
             `;
-            
+
             try {
                 const response = await fetch(`/api/viajes?placa=${placa}&fecha=${fecha}`);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     document.getElementById('lista-viajes').innerHTML = `<p style="color: red;">${data.error}</p>`;
                     return;
                 }
-                
+
                 document.getElementById('stats-viajes').style.display = 'grid';
                 document.getElementById('total-viajes').textContent = data.total_viajes;
-                
+
                 let totalKm = 0;
                 let html = '';
-                
+
                 // Agregar botón de seleccionar todos
                 html += `
                     <div style="margin-bottom: 10px; display: flex; gap: 10px;">
-                        <button class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 12px;" onclick="seleccionarTodosViajes(true)">☑️ Seleccionar Todos</button>
-                        <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;" onclick="seleccionarTodosViajes(false)">❌ Deseleccionar</button>
+                        <button class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 12px;" onclick="seleccionarTodosViajes(true)">â˜‘ï¸ Seleccionar Todos</button>
+                        <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 12px;" onclick="seleccionarTodosViajes(false)">âŒ Deseleccionar</button>
                     </div>
                 `;
-                
+
                 data.viajes.forEach((viaje, i) => {
                     totalKm += viaje.distancia_km;
                     const inicio = new Date(viaje.inicio).toLocaleTimeString('es-CO');
                     const fin = new Date(viaje.fin).toLocaleTimeString('es-CO');
-                    
+
                     html += `
                         <div class="trip-card viaje-seleccionable seleccionado" data-viaje-index="${i}" style="border-left-color: ${coloresViajes[i % coloresViajes.length]};" onclick="toggleViajeSeleccion(${i})">
                             <h4 style="color: ${coloresViajes[i % coloresViajes.length]}; margin: 0 0 8px 0;">Viaje ${viaje.viaje_num || i + 1}</h4>
@@ -908,11 +987,11 @@
                                 <span>${fin}</span>
                             </div>
                             <div class="trip-detail">
-                                <span>📏 Distancia:</span>
+                                <span>ðŸ“ Distancia:</span>
                                 <span>${viaje.distancia_km} km</span>
                             </div>
                             <div class="trip-detail">
-                                <span>⏱️ Duración:</span>
+                                <span>â±ï¸ Duración:</span>
                                 <span>${viaje.duracion_min} min</span>
                             </div>
                             <div class="trip-detail">
@@ -922,18 +1001,18 @@
                         </div>
                     `;
                 });
-                
+
                 document.getElementById('total-km').textContent = totalKm.toFixed(1);
                 document.getElementById('lista-viajes').innerHTML = html || '<p>No hay viajes en esta fecha</p>';
-                
+
                 // Calcular y mostrar resumen del día
                 if (data.viajes.length > 0) {
                     const primerViaje = data.viajes[0];
                     const ultimoViaje = data.viajes[data.viajes.length - 1];
-                    
+
                     const primerEncendido = new Date(primerViaje.inicio);
                     const ultimoApagado = new Date(ultimoViaje.fin);
-                    
+
                     // Formatear horas
                     const formatoHora = (fecha) => {
                         const h = String(fecha.getHours()).padStart(2, '0');
@@ -941,14 +1020,14 @@
                         const s = String(fecha.getSeconds()).padStart(2, '0');
                         return `${h}:${m}:${s}`;
                     };
-                    
+
                     // Calcular tiempo total activo (suma de duraciones)
                     let tiempoTotalMin = 0;
                     data.viajes.forEach(v => tiempoTotalMin += v.duracion_min || 0);
                     const horas = Math.floor(tiempoTotalMin / 60);
                     const mins = Math.round(tiempoTotalMin % 60);
                     const tiempoFormato = horas > 0 ? `${horas}h ${mins}m` : `${mins} min`;
-                    
+
                     // Mostrar resumen
                     document.getElementById('resumen-dia').style.display = 'block';
                     document.getElementById('dia-inicio').textContent = formatoHora(primerEncendido);
@@ -960,23 +1039,23 @@
                 } else {
                     document.getElementById('resumen-dia').style.display = 'none';
                 }
-                
+
                 // Guardar datos de viajes para usar después
                 window.viajesActuales = data;
-                
+
                 // Mostrar todos los viajes por defecto
                 await mostrarViajesSeleccionados();
-                
+
             } catch (error) {
                 document.getElementById('lista-viajes').innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
             }
         }
-        
-        // ===== GRÁFICA DE VELOCIDAD =====
+
+        // ===== GRÃFICA DE VELOCIDAD =====
         let speedChart = null;
         let speedChartMarker = null; // Marcador en mapa al hacer hover
         let allSpeedPoints = [];     // Todos los puntos para la gráfica
-        
+
         function renderSpeedChart(viajes) {
             // Recopilar todos los puntos con velocidad y hora
             allSpeedPoints = [];
@@ -993,28 +1072,28 @@
             });
             // Ordenar por fecha
             allSpeedPoints.sort((a, b) => a.fecha - b.fecha);
-            
+
             if (allSpeedPoints.length === 0) return;
-            
+
             const labels = allSpeedPoints.map(p => p.fecha);
             const speeds = allSpeedPoints.map(p => p.velocidad);
             const maxSpeed = Math.max(...speeds);
-            
+
             // Mostrar contenedor
             document.getElementById('speed-chart-container').style.display = 'block';
             // Forzar re-layout del mapa
             setTimeout(() => map.invalidateSize(), 50);
-            
+
             // Destruir gráfica anterior
             if (speedChart) speedChart.destroy();
-            
+
             const ctx = document.getElementById('speedChart').getContext('2d');
-            
+
             // Gradiente
             const gradient = ctx.createLinearGradient(0, 0, 0, 150);
             gradient.addColorStop(0, 'rgba(26, 115, 232, 0.4)');
             gradient.addColorStop(1, 'rgba(26, 115, 232, 0.02)');
-            
+
             speedChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -1094,7 +1173,7 @@
                             const idx = elements[0].index;
                             const pt = allSpeedPoints[idx];
                             if (pt) {
-                                document.getElementById('chart-hover-info').textContent = 
+                                document.getElementById('chart-hover-info').textContent =
                                     `${pt.velocidad} kph  ${pt.fecha.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit', second:'2-digit'})}`;
                                 // Mover marcador en mapa
                                 if (speedChartMarker) map.removeLayer(speedChartMarker);
@@ -1107,18 +1186,18 @@
                     }
                 }
             });
-            
+
             // Info inicial
             document.getElementById('chart-hover-info').textContent = `Max: ${maxSpeed} kph | ${allSpeedPoints.length} puntos`;
         }
-        
+
         function cerrarGrafica() {
             document.getElementById('speed-chart-container').style.display = 'none';
             if (speedChart) { speedChart.destroy(); speedChart = null; }
             if (speedChartMarker) { map.removeLayer(speedChartMarker); speedChartMarker = null; }
             setTimeout(() => map.invalidateSize(), 50);
         }
-        
+
         // ===== COLORES Y VIAJES =====
         // Colores para los viajes
         const coloresViajes = [
@@ -1133,42 +1212,42 @@
             '#795548', // Marrón
             '#607d8b'  // Gris azulado
         ];
-        
+
         let polylines = []; // Para guardar todas las líneas de viajes
-        
+
         // Cargar recorrido
         async function cargarRecorrido() {
             const placa = document.getElementById('select-placa').value;
             const fecha = document.getElementById('select-fecha').value;
-            
+
             if (!placa || !fecha) {
                 alert('Selecciona una placa y una fecha');
                 return;
             }
-            
+
             limpiarMapa();
-            
+
             try {
                 const response = await fetch(`/api/recorrido?placa=${placa}&fecha=${fecha}`);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     alert(data.error);
                     return;
                 }
-                
+
                 if (!data.viajes || data.viajes.length === 0) {
                     alert('No hay datos de recorrido para esta fecha');
                     return;
                 }
-                
+
                 const allBounds = [];
-                
+
                 // Dibujar cada viaje con un color diferente
                 data.viajes.forEach((viaje, index) => {
                     const color = coloresViajes[index % coloresViajes.length];
                     const puntos = viaje.puntos.map(p => [p.lat, p.lng]);
-                    
+
                     if (puntos.length > 0) {
                         // Línea del viaje
                         const line = L.polyline(puntos, {
@@ -1177,9 +1256,9 @@
                             opacity: 0.8
                         }).addTo(map);
                         polylines.push(line);
-                        
+
                         puntos.forEach(p => allBounds.push(p));
-                        
+
                         // Puntos intermedios (cada reporte GPS)
                         viaje.puntos.forEach((punto, pIndex) => {
                             // Saltar el primero y último (tienen marcadores especiales)
@@ -1193,7 +1272,7 @@
                                     opacity: 1,
                                     fillOpacity: 0.9
                                 }).addTo(map).bindPopup(`
-                                    <b style="color: ${color};">📍 Punto #${punto.num || pIndex + 1}</b><br>
+                                    <b style="color: ${color};">ðŸ“ Punto #${punto.num || pIndex + 1}</b><br>
                                     <b>Viaje:</b> ${viaje.viaje_num}<br>
                                     <b>Ignición:</b> ${ignicion}<br>
                                     <b>Velocidad:</b> ${punto.velocidad} km/h<br>
@@ -1202,11 +1281,11 @@
                                 markers.push(markerPunto);
                             }
                         });
-                        
+
                         // Marcador inicio del viaje (Ignition ON)
                         const inicio = viaje.puntos[0];
                         const fin = viaje.puntos[viaje.puntos.length - 1];
-                        
+
                         const markerInicio = L.marker([inicio.lat, inicio.lng], {
                             icon: L.divIcon({
                                 className: 'custom-marker',
@@ -1221,13 +1300,13 @@
                             <b>Hora:</b> ${new Date(inicio.fecha).toLocaleString('es-CO')}<br>
                             <b>Total puntos:</b> ${viaje.total_puntos || viaje.puntos.length}<br>
                             <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
-                            <b style="color: #ea4335;">📍 Punto Final:</b><br>
+                            <b style="color: #ea4335;">ðŸ“ Punto Final:</b><br>
                             <b>Punto #:</b> ${fin.num || viaje.puntos.length}<br>
                             <b>Velocidad:</b> ${fin.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(fin.fecha).toLocaleString('es-CO')}
                         `);
                         markers.push(markerInicio);
-                        
+
                         // Marcador fin del viaje (Ignition OFF)
                         const markerFin = L.marker([fin.lat, fin.lng], {
                             icon: L.divIcon({
@@ -1242,7 +1321,7 @@
                             <b>Velocidad:</b> ${fin.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(fin.fecha).toLocaleString('es-CO')}<br>
                             <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
-                            <b style="color: #34a853;">📍 Punto Inicial:</b><br>
+                            <b style="color: #34a853;">ðŸ“ Punto Inicial:</b><br>
                             <b>Punto #:</b> ${inicio.num || 1}<br>
                             <b>Velocidad:</b> ${inicio.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(inicio.fecha).toLocaleString('es-CO')}
@@ -1250,22 +1329,22 @@
                         markers.push(markerFin);
                     }
                 });
-                
+
                 if (allBounds.length > 0) {
                     map.fitBounds(allBounds, { padding: [50, 50] });
                 }
-                
+
                 // Actualizar total de reportes del día
                 let totalReportes = 0;
                 data.viajes.forEach(v => totalReportes += v.puntos ? v.puntos.length : 0);
                 document.getElementById('dia-reportes').textContent = totalReportes;
-                
+
                 // Actualizar leyenda con colores de viajes
                 actualizarLeyendaViajes(data.viajes);
-                
+
                 // Renderizar gráfica de velocidad
                 renderSpeedChart(data.viajes);
-                
+
             } catch (error) {
                 alert('Error cargando recorrido: ' + error.message);
             }
@@ -1285,7 +1364,7 @@
             });
             document.querySelector('.legend').innerHTML = legendHtml;
         }
-        
+
         // Funciones para selección de viajes
         function toggleViajeSeleccion(index) {
             const tarjeta = document.querySelector(`.viaje-seleccionable[data-viaje-index="${index}"]`);
@@ -1294,7 +1373,7 @@
                 mostrarViajesSeleccionados();
             }
         }
-        
+
         function seleccionarTodosViajes(seleccionar) {
             const tarjetas = document.querySelectorAll('.viaje-seleccionable');
             tarjetas.forEach(tarjeta => {
@@ -1306,51 +1385,51 @@
             });
             mostrarViajesSeleccionados();
         }
-        
+
         // Mostrar solo viajes seleccionados en el mapa
         async function mostrarViajesSeleccionados() {
             const placa = document.getElementById('select-placa').value;
             const fecha = document.getElementById('select-fecha').value;
-            
+
             if (!placa || !fecha) {
                 return;
             }
-            
+
             // Obtener índices de viajes seleccionados
             const tarjetasSeleccionadas = document.querySelectorAll('.viaje-seleccionable.seleccionado');
             const indicesSeleccionados = Array.from(tarjetasSeleccionadas)
                 .map(tarjeta => parseInt(tarjeta.dataset.viajeIndex));
-            
+
             limpiarMapa();
-            
+
             if (indicesSeleccionados.length === 0) {
                 // Si no hay viajes seleccionados, solo limpia el mapa
                 return;
             }
-            
+
             try {
                 const response = await fetch(`/api/recorrido?placa=${placa}&fecha=${fecha}`);
                 const data = await response.json();
-                
+
                 if (data.error) {
                     alert(data.error);
                     return;
                 }
-                
+
                 if (!data.viajes || data.viajes.length === 0) {
                     alert('No hay datos de recorrido para esta fecha');
                     return;
                 }
-                
+
                 const allBounds = [];
-                
+
                 // Dibujar solo los viajes seleccionados
                 data.viajes.forEach((viaje, index) => {
                     if (!indicesSeleccionados.includes(index)) return; // Saltar si no está seleccionado
-                    
+
                     const color = coloresViajes[index % coloresViajes.length];
                     const puntos = viaje.puntos.map(p => [p.lat, p.lng]);
-                    
+
                     if (puntos.length > 0) {
                         // Línea del viaje
                         const line = L.polyline(puntos, {
@@ -1359,9 +1438,9 @@
                             opacity: 0.8
                         }).addTo(map);
                         polylines.push(line);
-                        
+
                         puntos.forEach(p => allBounds.push(p));
-                        
+
                         // Puntos intermedios (cada reporte GPS)
                         viaje.puntos.forEach((punto, pIndex) => {
                             if (pIndex > 0 && pIndex < viaje.puntos.length - 1) {
@@ -1374,7 +1453,7 @@
                                     opacity: 1,
                                     fillOpacity: 0.9
                                 }).addTo(map).bindPopup(`
-                                    <b style="color: ${color};">📍 Punto #${punto.num || pIndex + 1}</b><br>
+                                    <b style="color: ${color};">ðŸ“ Punto #${punto.num || pIndex + 1}</b><br>
                                     <b>Viaje:</b> ${viaje.viaje_num}<br>
                                     <b>Ignición:</b> ${ignicion}<br>
                                     <b>Velocidad:</b> ${punto.velocidad} km/h<br>
@@ -1383,11 +1462,11 @@
                                 markers.push(markerPunto);
                             }
                         });
-                        
+
                         // Marcador inicio del viaje (Ignition ON)
                         const inicio = viaje.puntos[0];
                         const fin = viaje.puntos[viaje.puntos.length - 1];
-                        
+
                         const markerInicio = L.marker([inicio.lat, inicio.lng], {
                             icon: L.divIcon({
                                 className: 'custom-marker',
@@ -1402,13 +1481,13 @@
                             <b>Hora:</b> ${new Date(inicio.fecha).toLocaleString('es-CO')}<br>
                             <b>Total puntos:</b> ${viaje.total_puntos || viaje.puntos.length}<br>
                             <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
-                            <b style="color: #ea4335;">📍 Punto Final:</b><br>
+                            <b style="color: #ea4335;">ðŸ“ Punto Final:</b><br>
                             <b>Punto #:</b> ${fin.num || viaje.puntos.length}<br>
                             <b>Velocidad:</b> ${fin.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(fin.fecha).toLocaleString('es-CO')}
                         `);
                         markers.push(markerInicio);
-                        
+
                         // Marcador fin del viaje (Ignition OFF)
                         const markerFin = L.marker([fin.lat, fin.lng], {
                             icon: L.divIcon({
@@ -1423,7 +1502,7 @@
                             <b>Velocidad:</b> ${fin.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(fin.fecha).toLocaleString('es-CO')}<br>
                             <hr style="margin: 5px 0; border: none; border-top: 1px solid #ddd;">
-                            <b style="color: #34a853;">📍 Punto Inicial:</b><br>
+                            <b style="color: #34a853;">ðŸ“ Punto Inicial:</b><br>
                             <b>Punto #:</b> ${inicio.num || 1}<br>
                             <b>Velocidad:</b> ${inicio.velocidad} km/h<br>
                             <b>Hora:</b> ${new Date(inicio.fecha).toLocaleString('es-CO')}
@@ -1431,11 +1510,11 @@
                         markers.push(markerFin);
                     }
                 });
-                
+
                 if (allBounds.length > 0) {
                     map.fitBounds(allBounds, { padding: [50, 50] });
                 }
-                
+
                 // Actualizar total de reportes solo de viajes seleccionados
                 let totalReportes = 0;
                 data.viajes.forEach((v, i) => {
@@ -1444,19 +1523,19 @@
                     }
                 });
                 document.getElementById('dia-reportes').textContent = totalReportes;
-                
+
                 // Actualizar leyenda con solo viajes seleccionados
                 const viajesSeleccionados = data.viajes.filter((v, i) => indicesSeleccionados.includes(i));
                 actualizarLeyendaViajes(viajesSeleccionados);
-                
+
                 // Renderizar gráfica con viajes seleccionados
                 renderSpeedChart(viajesSeleccionados);
-                
+
             } catch (error) {
                 alert('Error cargando recorrido: ' + error.message);
             }
         }
-        
+
         // Limpiar mapa
         function limpiarMapa() {
             markerClusterGroup.clearLayers();
@@ -1470,7 +1549,7 @@
             polylines = [];
             // Limpiar gráfica
             cerrarGrafica();
-            
+
             // Restaurar leyenda por defecto
             document.querySelector('.legend').innerHTML = `
                 <strong>Leyenda</strong>
@@ -1482,13 +1561,13 @@
                 </div>
             `;
         }
-        
+
         // Inicialización
         document.addEventListener('DOMContentLoaded', () => {
             // Establecer fecha de hoy
             const hoy = new Date().toISOString().split('T')[0];
             document.getElementById('select-fecha').value = hoy;
-            
+
             cargarUbicaciones();
             cargarDispositivos();
         });
